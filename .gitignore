@@ -1,0 +1,20 @@
+# Logs
+*.log
+logs/
+
+# Dependencies
+node_modules/
+
+# Production builds
+dist/
+dist-ssr/
+
+# IDEs / System
+.vscode/
+.idea/
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
