@@ -2,7 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import axios from 'axios';
-import { OpenSkyResponse, FlightTelemetry } from './type';
+import { OpenSkyResponse, FlightTelemetry, OpenSkyStateVector } from './types';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -22,7 +22,7 @@ const AIRSPACE_BOUNDS = {
 /**
  * Normalizes OpenSky array metrics into aviation standard units and typed objects
  */
-const normalizeFlightData = (state: any[]): FlightTelemetry => {
+const normalizeFlightData = (state: OpenSkyStateVector): FlightTelemetry => {
     const speedKnots = state[9] ? Math.round(state[9] * 1.94384) : 0;
     const altitudeFeet = state[7] ? Math.round(state[7] * 3.28084) : 0;
     const verticalRate = state[11] || 0;
@@ -107,8 +107,9 @@ app.get('/api/telemetry', async (req, res) => {
         lastFetchTime = now;
 
         res.json(processedFlights);
-    } catch (error: any) {
-        console.error('Error fetching data from OpenSky:', error.message);
+    } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        console.error('Error fetching data from OpenSky:', errorMessage);
         
         // Fallback to cache on error (like 429 Rate Limit)
         if (cachedFlights.length > 0) {

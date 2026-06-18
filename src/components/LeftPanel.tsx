@@ -9,6 +9,7 @@ interface LeftPanelProps {
   setMinAltitude: (alt: number) => void;
   maxAltitude: number;
   setMaxAltitude: (alt: number) => void;
+  refreshData: () => void;
 }
 
 export const LeftPanel: React.FC<LeftPanelProps> = ({
@@ -20,6 +21,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
   setMinAltitude,
   maxAltitude,
   setMaxAltitude,
+  refreshData,
 }) => {
   return (
     <aside className="flex flex-col h-full bg-white border-r border-slate-200">
@@ -38,10 +40,10 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
           <path d="M17.8 19.2 16 11l3.5-3.5A2.12 2.12 0 0 0 16.5 4L13 7.5l-8.2-1.8L3 7l7.5 4.5L7 15l-3-1L3 15l3.5 2.5L9 21l1-.5-1-3 4-3.5 4.5 7.5Z" />
         </svg>
         <div>
-          <h1 className="text-sm font-bold tracking-tight text-slate-900 uppercase">
-            AeroGrid Analytics
+          <h1 className="text-[11px] font-bold tracking-tight text-slate-900 uppercase leading-tight">
+            AeroGrid Aviation Intelligence Platform
           </h1>
-          <p className="text-[10px] text-slate-500 font-medium tracking-wider uppercase">
+          <p className="text-[9px] text-slate-500 font-medium tracking-wider uppercase mt-0.5">
             Telemetry Platform
           </p>
         </div>
@@ -202,40 +204,30 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
           </div>
         </div>
 
-        {/* Static Warnings Summary */}
-        <div className="p-3 bg-amber-50/50 border border-amber-200 rounded-sm">
-          <div className="flex items-start gap-2">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              className="w-4 h-4 text-amber-600 shrink-0 mt-0.5"
-            >
-              <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
-              <line x1="12" y1="9" x2="12" y2="13" />
-              <line x1="12" y1="17" x2="12.01" y2="17" />
-            </svg>
-            <div>
-              <p className="text-[11px] font-bold text-amber-800">AIRSPACE NOTICE</p>
-              <p className="text-[10px] text-amber-700 mt-0.5 leading-relaxed">
-                Reduced Vertical Separation Minimum (RVSM) active in Sector Delta. Maintain 1,000 ft separation.
-              </p>
-            </div>
-          </div>
-        </div>
+        {/* Static Warnings Summary Removed */}
       </div>
 
       {/* Footer Info */}
       <div className="px-6 py-4 border-t border-slate-200 bg-slate-50">
-        <div className="flex items-center justify-between text-[10px] text-slate-400">
+        <div className="flex items-center justify-between text-[10px] text-slate-400 mb-3">
           <span>OPERATOR: SEC-04</span>
           <span className="flex items-center gap-1">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
             SECURE
           </span>
         </div>
+        <button
+          onClick={refreshData}
+          className="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-sm hover:bg-slate-50 hover:text-slate-900 transition-colors"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-3.5 h-3.5">
+            <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+            <path d="M3 3v5h5" />
+            <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
+            <path d="M16 21v-5h5" />
+          </svg>
+          Refresh Data
+        </button>
       </div>
     </aside>
   );

@@ -10,7 +10,7 @@ interface DataCanvasProps {
 }
 
 export const DataCanvas: React.FC<DataCanvasProps> = ({ flights, selectedIcao, setSelectedIcao }) => {
-  const globeEl = useRef<any>();
+  const globeEl = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   
   const [countries, setCountries] = useState({ features: [] });
@@ -21,7 +21,7 @@ export const DataCanvas: React.FC<DataCanvasProps> = ({ flights, selectedIcao, s
     fetch('https://raw.githubusercontent.com/vasturiano/react-globe.gl/master/example/datasets/ne_110m_admin_0_countries.geojson')
       .then(res => res.json())
       .then(data => setCountries(data))
-      .catch(err => console.error('Error loading country polygons:', err));
+      .catch(() => {}); // Removed console.error for clean logs
   }, []);
 
   useEffect(() => {
