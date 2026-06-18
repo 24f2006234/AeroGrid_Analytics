@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import axios from 'axios';
@@ -12,10 +13,10 @@ app.use(express.json());
 // OpenSky bounding box coordinates (Example: covering a target airspace region)
 // format: [lamin, lomin, lamax, lomax]
 const AIRSPACE_BOUNDS = {
-    lamin: 20.0,
-    lomin: 70.0,
-    lamax: 30.0,
-    lomax: 90.0
+    lamin: 6.0,  // South tip of India
+    lomin: 68.0, // West Gujarat
+    lamax: 36.0, // North Kashmir
+    lomax: 98.0  // East Arunachal Pradesh
 };
 
 /**
@@ -49,13 +50,27 @@ const normalizeFlightData = (state: any[]): FlightTelemetry => {
     };
 };
 
+let cachedFlights: FlightTelemetry[] = [];
+let lastFetchTime = 0;
+const CACHE_TTL = 60000; // 60 seconds
+
 /**
  * Route: Fetches active flights within defined geographic boundaries
  */
 app.get('/api/telemetry', async (req, res) => {
     try {
+        const now = Date.now();
+        // Return cached data if within TTL
+        if (now - lastFetchTime < CACHE_TTL && cachedFlights.length > 0) {
+            console.log('Serving cached data');
+            return res.json(cachedFlights);
+        }
+
+        console.log('Fetching fresh data from OpenSky');
         const url = `https://opensky-network.org/api/states/all`;
-        const response = await axios.get<OpenSkyResponse>(url, {
+        
+        // Prepare axios config, conditionally adding auth if env vars exist
+        const axiosConfig: any = {
             params: {
                 lamin: AIRSPACE_BOUNDS.lamin,
                 lomin: AIRSPACE_BOUNDS.lomin,
@@ -63,10 +78,23 @@ app.get('/api/telemetry', async (req, res) => {
                 lomax: AIRSPACE_BOUNDS.lomax
             },
             timeout: 5000
-        });
+        };
+
+        if (process.env.OPENSKY_USERNAME && process.env.OPENSKY_PASSWORD) {
+            console.log(`Using OpenSky Auth for user: ${process.env.OPENSKY_USERNAME}`);
+            axiosConfig.auth = {
+                username: process.env.OPENSKY_USERNAME,
+                password: process.env.OPENSKY_PASSWORD
+            };
+        } else {
+            console.log('No OpenSky Auth credentials found in .env');
+        }
+
+        const response = await axios.get<OpenSkyResponse>(url, axiosConfig);
 
         if (!response.data || !response.data.states) {
-            return res.json([]);
+            console.log('Serving cached data due to empty response');
+            return res.json(cachedFlights);
         }
 
         const processedFlights = response.data.states
@@ -74,9 +102,20 @@ app.get('/api/telemetry', async (req, res) => {
             // Filter out ground vehicles or invalid positions
             .filter(flight => flight.latitude !== 0 && flight.longitude !== 0);
 
+        // Update cache
+        cachedFlights = processedFlights;
+        lastFetchTime = now;
+
         res.json(processedFlights);
     } catch (error: any) {
         console.error('Error fetching data from OpenSky:', error.message);
+        
+        // Fallback to cache on error (like 429 Rate Limit)
+        if (cachedFlights.length > 0) {
+            console.log('Serving cached data due to API error/rate-limit.');
+            return res.json(cachedFlights);
+        }
+        
         res.status(500).json({ error: 'Failed to retrieve telemetry data stream' });
     }
 });
