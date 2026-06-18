@@ -7,135 +7,46 @@ interface TelemetryPanelProps {
   selectedStatus: string;
   minAltitude: number;
   maxAltitude: number;
+  flights: Flight[];
+  isLoading: boolean;
+  isError: boolean;
+  selectedIcao: string | null;
+  setSelectedIcao: (icao: string | null) => void;
 }
-
-const INITIAL_FLIGHTS: Flight[] = [
-  {
-    callsign: 'IGO612',
-    altitude: 32400,
-    speed: 465,
-    heading: 120,
-    coordinates: '22.57N / 88.36E',
-    status: 'ACTIVE',
-    origin: 'DEL',
-    destination: 'CCU',
-    aircraftType: 'A320',
-  },
-  {
-    callsign: 'DAL192',
-    altitude: 36000,
-    speed: 510,
-    heading: 280,
-    coordinates: '40.71N / 74.00W',
-    status: 'ACTIVE',
-    origin: 'LHR',
-    destination: 'JFK',
-    aircraftType: 'B777',
-  },
-  {
-    callsign: 'SVR480',
-    altitude: 29500,
-    speed: 435,
-    heading: 45,
-    coordinates: '55.75N / 37.61E',
-    status: 'WARNING',
-    origin: 'DME',
-    destination: 'LED',
-    aircraftType: 'A321',
-  },
-  {
-    callsign: 'AAL889',
-    altitude: 34000,
-    speed: 485,
-    heading: 195,
-    coordinates: '34.05N / 118.24W',
-    status: 'ACTIVE',
-    origin: 'ORD',
-    destination: 'LAX',
-    aircraftType: 'B739',
-  },
-  {
-    callsign: 'AFR012',
-    altitude: 37200,
-    speed: 495,
-    heading: 90,
-    coordinates: '48.85N / 2.35E',
-    status: 'ERROR',
-    origin: 'CDG',
-    destination: 'HND',
-    aircraftType: 'B789',
-  },
-  {
-    callsign: 'QTR77A',
-    altitude: 31000,
-    speed: 470,
-    heading: 315,
-    coordinates: '25.28N / 51.53E',
-    status: 'ACTIVE',
-    origin: 'DOH',
-    destination: 'LHR',
-    aircraftType: 'A350',
-  },
-  {
-    callsign: 'JAL006',
-    altitude: 35000,
-    speed: 502,
-    heading: 85,
-    coordinates: '35.67N / 139.65E',
-    status: 'WARNING',
-    origin: 'HND',
-    destination: 'LAX',
-    aircraftType: 'B77W',
-  },
-];
 
 export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({
   searchQuery,
   selectedStatus,
   minAltitude,
   maxAltitude,
+  flights,
+  isLoading,
+  isError,
+  selectedIcao,
+  setSelectedIcao,
 }) => {
-  const [flights, setFlights] = useState<Flight[]>(INITIAL_FLIGHTS);
-  const [selectedFlightCallsign, setSelectedFlightCallsign] = useState<string>('IGO612');
 
-  // Core telemetry simulator: minor fluctuations in speed and altitude every 2 seconds
   useEffect(() => {
-    const interval = setInterval(() => {
-      setFlights((currentFlights) =>
-        currentFlights.map((flight) => {
-          // Fluctuates altitude between -150 and +150 feet, clamped between 28k and 38k
-          const altChange = Math.floor(Math.random() * 301) - 150;
-          const newAltitude = Math.min(
-            38000,
-            Math.max(28000, flight.altitude + altChange)
-          );
+    if (flights.length > 0 && !selectedIcao) {
+      setSelectedIcao(flights[0].icao24);
+    }
+  }, [flights, selectedIcao, setSelectedIcao]);
 
-          // Fluctuates speed between -3 and +3 knots, clamped between 420 and 520
-          const speedChange = Math.floor(Math.random() * 7) - 3;
-          const newSpeed = Math.min(
-            520,
-            Math.max(420, flight.speed + speedChange)
-          );
-
-          return {
-            ...flight,
-            altitude: newAltitude,
-            speed: newSpeed,
-          };
-        })
-      );
-    }, 2000);
-
-    return () => clearInterval(interval);
-  }, []);
+  useEffect(() => {
+    if (selectedIcao) {
+      const element = document.getElementById(`flight-card-${selectedIcao}`);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    }
+  }, [selectedIcao]);
 
   // Filter logic
   const filteredFlights = flights.filter((flight) => {
     const matchesSearch =
       flight.callsign.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      flight.aircraftType.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      flight.origin.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      flight.destination.toLowerCase().includes(searchQuery.toLowerCase());
+      flight.icao24.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      flight.originCountry.toLowerCase().includes(searchQuery.toLowerCase());
 
     const matchesStatus =
       selectedStatus === 'ALL' || flight.status === selectedStatus;
@@ -146,7 +57,7 @@ export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({
     return matchesSearch && matchesStatus && matchesAltitude;
   });
 
-  const selectedFlight = flights.find((f) => f.callsign === selectedFlightCallsign) || filteredFlights[0];
+  const selectedFlight = flights.find((f) => f.icao24 === selectedIcao) || filteredFlights[0];
 
   const getStatusStyle = (status: Flight['status']) => {
     switch (status) {
@@ -159,6 +70,10 @@ export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({
       default:
         return 'bg-slate-50 border-slate-200 text-slate-700';
     }
+  };
+
+  const formatCoordinates = (lat: number, lon: number) => {
+    return `${Math.abs(lat).toFixed(2)}°${lat >= 0 ? 'N' : 'S'} / ${Math.abs(lon).toFixed(2)}°${lon >= 0 ? 'E' : 'W'}`;
   };
 
   return (
@@ -177,7 +92,20 @@ export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({
 
       {/* Flight Cards Feed */}
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-2">
-        {filteredFlights.length === 0 ? (
+        {isLoading ? (
+          <div className="text-center py-8 text-[10px] text-slate-400 font-medium uppercase tracking-wider">
+            Initializing Uplink...
+          </div>
+        ) : isError ? (
+          <div className="text-center py-8 border border-red-200 bg-red-50 rounded-sm">
+            <p className="text-[10px] text-red-700 font-bold uppercase tracking-wider">
+              CONNECTION LOST
+            </p>
+            <p className="text-[9px] text-red-600 mt-1 uppercase">
+              System Offline
+            </p>
+          </div>
+        ) : filteredFlights.length === 0 ? (
           <div className="text-center py-8 border border-dashed border-slate-200 rounded-sm">
             <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">
               No matching transponders
@@ -185,11 +113,12 @@ export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({
           </div>
         ) : (
           filteredFlights.map((flight) => {
-            const isSelected = selectedFlight?.callsign === flight.callsign;
+            const isSelected = selectedFlight?.icao24 === flight.icao24;
             return (
               <div
-                key={flight.callsign}
-                onClick={() => setSelectedFlightCallsign(flight.callsign)}
+                key={flight.icao24}
+                id={`flight-card-${flight.icao24}`}
+                onClick={() => setSelectedIcao(flight.icao24)}
                 className={`p-3 border rounded-sm transition-all cursor-pointer ${
                   isSelected
                     ? 'border-slate-900 bg-slate-50/50'
@@ -200,10 +129,10 @@ export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({
                 <div className="flex justify-between items-start mb-2">
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-bold text-slate-950 font-sans">
-                      {flight.callsign}
+                      {flight.callsign || 'UNKNOWN'}
                     </span>
-                    <span className="text-[9px] text-slate-400 font-mono">
-                      {flight.aircraftType}
+                    <span className="text-[9px] text-slate-400 font-mono uppercase">
+                      {flight.originCountry}
                     </span>
                   </div>
                   <span
@@ -215,10 +144,10 @@ export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({
                   </span>
                 </div>
 
-                {/* Card Secondary Line (Origin -> Dest) */}
+                {/* Card Secondary Line */}
                 <div className="flex justify-between items-center text-[10px] text-slate-500 font-medium mb-2.5">
-                  <span>
-                    {flight.origin} → {flight.destination}
+                  <span className="font-mono text-[9px]">
+                    {formatCoordinates(flight.latitude, flight.longitude)}
                   </span>
                   <div className="flex items-center gap-1">
                     <svg
@@ -265,15 +194,15 @@ export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({
               Telemetry Detail
             </h3>
             <span className="text-[9px] font-mono text-slate-400">
-              SQUAWK: <MonoText className="text-[9px] text-slate-700">7700</MonoText>
+              SQUAWK: <MonoText className="text-[9px] text-slate-700">{selectedFlight.squawk}</MonoText>
             </span>
           </div>
 
           <div className="grid grid-cols-2 gap-y-3 gap-x-4">
             <div className="space-y-0.5">
-              <p className="text-[9px] text-slate-400 uppercase">Callsign / Type</p>
+              <p className="text-[9px] text-slate-400 uppercase">Callsign / HEX</p>
               <p className="text-xs font-bold text-slate-900">
-                {selectedFlight.callsign} <span className="text-[9px] text-slate-400 font-mono font-normal">({selectedFlight.aircraftType})</span>
+                {selectedFlight.callsign || 'UNK'} <span className="text-[9px] text-slate-400 font-mono font-normal">({selectedFlight.icao24})</span>
               </p>
             </div>
 
@@ -303,7 +232,15 @@ export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({
             <div className="col-span-2 space-y-0.5">
               <p className="text-[9px] text-slate-400 uppercase">Position Vectors (Lat/Lon)</p>
               <p className="text-[11px] font-medium text-slate-900">
-                <MonoText className="text-[11px]">{selectedFlight.coordinates}</MonoText>
+                <MonoText className="text-[11px]">{formatCoordinates(selectedFlight.latitude, selectedFlight.longitude)}</MonoText>
+              </p>
+            </div>
+            
+            <div className="col-span-2 space-y-0.5">
+              <p className="text-[9px] text-slate-400 uppercase">Vertical Rate</p>
+              <p className="text-[11px] font-medium text-slate-900">
+                <MonoText className="text-[11px]">{selectedFlight.verticalRate}</MonoText>
+                <span className="text-[8px] text-slate-400 font-normal ml-1">M/S</span>
               </p>
             </div>
           </div>
