@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Flight } from '../types';
 import { MonoText } from './MonoText';
 
@@ -25,6 +25,9 @@ export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({
   selectedIcao,
   setSelectedIcao,
 }) => {
+  const [predictedETA, setPredictedETA] = useState<number | null>(null);
+  const [isETALoading, setIsETALoading] = useState<boolean>(false);
+
 
   useEffect(() => {
     if (flights.length > 0 && !selectedIcao) {
@@ -58,6 +61,51 @@ export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({
   });
 
   const selectedFlight = flights.find((f) => f.icao24 === selectedIcao) || filteredFlights[0];
+
+  useEffect(() => {
+    let isMounted = true;
+    if (selectedFlight) {
+      setIsETALoading(true);
+      
+      fetch('http://localhost:8000/predict-eta', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          velocity: selectedFlight.speed,
+          altitude: selectedFlight.altitude,
+          heading: selectedFlight.heading,
+          vertical_rate: selectedFlight.verticalRate,
+          min_dist_to_hub: 150
+        }),
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          if (isMounted && data.eta_minutes !== undefined) {
+            setPredictedETA(data.eta_minutes);
+          }
+        })
+        .catch((err) => {
+          console.error('Failed to fetch ML ETA:', err);
+        })
+        .finally(() => {
+          if (isMounted) setIsETALoading(false);
+        });
+    } else {
+      setPredictedETA(null);
+    }
+    
+    return () => {
+      isMounted = false;
+    };
+  }, [
+    selectedFlight?.icao24,
+    selectedFlight?.speed,
+    selectedFlight?.altitude,
+    selectedFlight?.heading,
+    selectedFlight?.verticalRate
+  ]);
 
   const getStatusStyle = (status: Flight['status']) => {
     switch (status) {
