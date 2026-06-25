@@ -13,6 +13,12 @@ const App: React.FC = () => {
   const { flights, isLoading, isError, refreshData } = useLiveTelemetry();
   const [selectedIcao, setSelectedIcao] = useState<string | null>(null);
 
+  const filteredGlobeFlights = React.useMemo(() => {
+    return flights.filter(
+      (flight) => flight.altitude >= minAltitude && flight.altitude <= maxAltitude
+    );
+  }, [flights, minAltitude, maxAltitude]);
+
   return (
     <div className="grid grid-cols-[20%_60%_20%] w-full h-screen bg-slate-50 text-slate-900 overflow-hidden select-none">
       <LeftPanel
@@ -27,7 +33,7 @@ const App: React.FC = () => {
         refreshData={refreshData}
       />
       <DataCanvas 
-        flights={flights} 
+        flights={filteredGlobeFlights} 
         selectedIcao={selectedIcao} 
         setSelectedIcao={setSelectedIcao} 
       />

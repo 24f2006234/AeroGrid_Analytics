@@ -45,27 +45,6 @@ export const DataCanvas: React.FC<DataCanvasProps> = ({ flights, selectedIcao, s
 
   return (
     <main className="relative flex flex-col h-full bg-slate-50 overflow-hidden select-none">
-      {/* Top Banner (Overlay) */}
-      <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-6 py-4 bg-white/80 backdrop-blur-sm border-b border-slate-200 z-10">
-        <div>
-          <h2 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
-            Spatial Radar Vector Canvas
-          </h2>
-          <p className="text-[10px] text-slate-500 font-mono">
-            SYS.LOC // AREA_NE_GRID_04 // 1920x1080_CORE
-          </p>
-        </div>
-        <div className="flex items-center gap-4 text-[10px] font-mono text-slate-500">
-          <div className="flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse"></span>
-            <span>RADAR: ACTIVE</span>
-          </div>
-          <div>
-            <span>LAT/LON TICKER: ENGAGED</span>
-          </div>
-        </div>
-      </div>
-
       {/* Globe Canvas */}
       <div ref={containerRef} className="flex-1 w-full h-full cursor-grab active:cursor-grabbing">
         {dimensions.width > 0 && (
