@@ -291,6 +291,22 @@ export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({
                 <span className="text-[8px] text-slate-400 font-normal ml-1">M/S</span>
               </p>
             </div>
+            
+            <div className="col-span-2 space-y-0.5 mt-2 pt-2 border-t border-slate-200">
+              <p className="text-[9px] text-slate-400 uppercase">ML ETA (BETA)</p>
+              <p className="text-[11px] font-medium text-slate-900">
+                {isETALoading ? (
+                  <span className="text-slate-500 italic animate-pulse">CALCULATING...</span>
+                ) : predictedETA !== null ? (
+                  <>
+                    <MonoText className="text-[11px] font-bold text-indigo-600">{predictedETA}</MonoText>
+                    <span className="text-[8px] text-slate-400 font-normal ml-1">MIN</span>
+                  </>
+                ) : (
+                  <span className="text-slate-400">N/A</span>
+                )}
+              </p>
+            </div>
           </div>
 
           {/* Simple Vector Compass Ticker */}
