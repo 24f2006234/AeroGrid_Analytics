@@ -93,7 +93,7 @@ export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({
       setLoadingRoute(true);
       setIsETALoading(true);
 
-      const fetchRoute = fetch(`http://localhost:5000/api/route/${selectedFlight.callsign}`)
+      fetch(`http://localhost:5000/api/route/${selectedFlight.callsign}`)
         .then((res) => res.json())
         .then((data) => {
           if (isMounted) setRouteData(data);
@@ -105,17 +105,21 @@ export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({
 
       const dynamicDistance = getDistanceToClosestHub(selectedFlight.latitude, selectedFlight.longitude);
 
-      const fetchML = fetch('http://localhost:8000/predict-eta', {
+      fetch('http://localhost:8000/predict-eta', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          velocity: selectedFlight.speed,
-          altitude: selectedFlight.altitude,
+          // Convert Knots back to Meters/Second
+          velocity: selectedFlight.speed / 1.94384, 
+          
+          // Convert Feet back to Meters
+          altitude: selectedFlight.altitude / 3.28084, 
+          
           heading: selectedFlight.heading,
-          vertical_rate: selectedFlight.verticalRate,
-          min_dist_to_hub: dynamicDistance
+          vertical_rate: selectedFlight.verticalRate, // Already in m/s
+          min_dist_to_hub: dynamicDistance // Kept as Kilometers
         }),
       })
         .then((res) => res.json())
