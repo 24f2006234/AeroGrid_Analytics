@@ -2,6 +2,27 @@ import React, { useEffect, useState } from 'react';
 import { Flight } from '../types';
 import { MonoText } from './MonoText';
 
+const AVIATION_HUBS = [
+  { name: 'DEL', lat: 28.5562, lon: 77.1000 },
+  { name: 'BOM', lat: 19.0896, lon: 72.8656 },
+  { name: 'BLR', lat: 13.1986, lon: 77.7066 },
+  { name: 'CCU', lat: 22.6520, lon: 88.4467 }
+];
+
+const calculateHaversineDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
+  const R = 6371.0; 
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+};
+
+const getDistanceToClosestHub = (flightLat: number, flightLon: number): number => {
+  const distances = AVIATION_HUBS.map(hub => calculateHaversineDistance(flightLat, flightLon, hub.lat, hub.lon));
+  return Math.min(...distances);
+};
+
 interface TelemetryPanelProps {
   searchQuery: string;
   selectedStatus: string;
@@ -82,6 +103,8 @@ export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({
           if (isMounted) setLoadingRoute(false);
         });
 
+      const dynamicDistance = getDistanceToClosestHub(selectedFlight.latitude, selectedFlight.longitude);
+
       const fetchML = fetch('http://localhost:8000/predict-eta', {
         method: 'POST',
         headers: {
@@ -92,7 +115,7 @@ export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({
           altitude: selectedFlight.altitude,
           heading: selectedFlight.heading,
           vertical_rate: selectedFlight.verticalRate,
-          min_dist_to_hub: 150
+          min_dist_to_hub: dynamicDistance
         }),
       })
         .then((res) => res.json())
@@ -121,7 +144,9 @@ export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({
     selectedFlight?.speed,
     selectedFlight?.altitude,
     selectedFlight?.heading,
-    selectedFlight?.verticalRate
+    selectedFlight?.verticalRate,
+    selectedFlight?.latitude,
+    selectedFlight?.longitude
   ]);
 
   let delayMinutes = 0;
