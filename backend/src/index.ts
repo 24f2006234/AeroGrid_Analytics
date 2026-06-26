@@ -57,7 +57,7 @@ const CACHE_TTL = 60000; // 60 seconds
 /**
  * Route: Fetches active flights within defined geographic boundaries
  */
-app.get('/api/telemetry', async (req, res) => {
+app.get('/api/telemetry', async (_req, res) => {
     try {
         const now = Date.now();
         // Return cached data if within TTL
@@ -68,7 +68,7 @@ app.get('/api/telemetry', async (req, res) => {
 
         console.log('Fetching fresh data from OpenSky');
         const url = `https://opensky-network.org/api/states/all`;
-        
+
         // Prepare axios config, conditionally adding auth if env vars exist
         const axiosConfig: any = {
             params: {
@@ -110,14 +110,47 @@ app.get('/api/telemetry', async (req, res) => {
     } catch (error: unknown) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         console.error('Error fetching data from OpenSky:', errorMessage);
-        
+
         // Fallback to cache on error (like 429 Rate Limit)
         if (cachedFlights.length > 0) {
             console.log('Serving cached data due to API error/rate-limit.');
             return res.json(cachedFlights);
         }
-        
+
         res.status(500).json({ error: 'Failed to retrieve telemetry data stream' });
+    }
+});
+
+app.get('/api/route/:callsign', async (req, res) => {
+    const defaultResponse = { origin: "N/A", destination: "N/A", airline: "Unknown", scheduledArrivalTS: null };
+    try {
+        const callsign = req.params.callsign ? req.params.callsign.trim() : '';
+        if (!callsign || callsign === 'UNK_FLT') {
+            return res.json(defaultResponse);
+        }
+
+        const url = `https://airlabs.co/api/v9/flight?flight_icao=${callsign}&api_key=${process.env.AIRLABS_API_KEY}`;
+        const response = await axios.get(url);
+
+        let data = response.data?.response;
+        if (Array.isArray(data)) {
+            data = data[0];
+        }
+
+        if (!data) {
+            return res.json(defaultResponse);
+        }
+
+        return res.json({
+            origin: data.dep_iata || "N/A",
+            destination: data.arr_iata || "N/A",
+            airline: data.airline_name || "Unknown Airline",
+            scheduledArrivalTS: data.arr_time_ts ?? null
+        });
+    } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        console.error(`Error fetching AirLabs data for ${req.params.callsign}:`, errorMessage);
+        return res.status(500).json(defaultResponse);
     }
 });
 
