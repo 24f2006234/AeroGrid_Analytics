@@ -25,7 +25,9 @@ export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({
   selectedIcao,
   setSelectedIcao,
 }) => {
-  const [predictedETA, setPredictedETA] = useState<number | null>(null);
+  const [routeData, setRouteData] = useState<{ origin: string; destination: string; airline: string; scheduledArrivalTS: number | null } | null>(null);
+  const [mlEtaMinutes, setMlEtaMinutes] = useState<number | null>(null);
+  const [loadingRoute, setLoadingRoute] = useState<boolean>(false);
   const [isETALoading, setIsETALoading] = useState<boolean>(false);
 
 
@@ -65,9 +67,22 @@ export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({
   useEffect(() => {
     let isMounted = true;
     if (selectedFlight) {
+      setRouteData(null);
+      setMlEtaMinutes(null);
+      setLoadingRoute(true);
       setIsETALoading(true);
-      
-      fetch('http://localhost:8000/predict-eta', {
+
+      const fetchRoute = fetch(`http://localhost:5000/api/route/${selectedFlight.callsign}`)
+        .then((res) => res.json())
+        .then((data) => {
+          if (isMounted) setRouteData(data);
+        })
+        .catch((err) => console.error('Failed to fetch Route:', err))
+        .finally(() => {
+          if (isMounted) setLoadingRoute(false);
+        });
+
+      const fetchML = fetch('http://localhost:8000/predict-eta', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -83,7 +98,7 @@ export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({
         .then((res) => res.json())
         .then((data) => {
           if (isMounted && data.eta_minutes !== undefined) {
-            setPredictedETA(data.eta_minutes);
+            setMlEtaMinutes(data.eta_minutes);
           }
         })
         .catch((err) => {
@@ -93,7 +108,8 @@ export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({
           if (isMounted) setIsETALoading(false);
         });
     } else {
-      setPredictedETA(null);
+      setRouteData(null);
+      setMlEtaMinutes(null);
     }
     
     return () => {
@@ -101,11 +117,22 @@ export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({
     };
   }, [
     selectedFlight?.icao24,
+    selectedFlight?.callsign,
     selectedFlight?.speed,
     selectedFlight?.altitude,
     selectedFlight?.heading,
     selectedFlight?.verticalRate
   ]);
+
+  let delayMinutes = 0;
+  let isDelayCalculated = false;
+  if (mlEtaMinutes !== null && routeData?.scheduledArrivalTS) {
+    const currentTimeTS = Math.floor(Date.now() / 1000);
+    const predictedArrivalTS = currentTimeTS + (mlEtaMinutes * 60);
+    const delaySeconds = predictedArrivalTS - routeData.scheduledArrivalTS;
+    delayMinutes = delaySeconds > 0 ? Math.round(delaySeconds / 60) : 0;
+    isDelayCalculated = true;
+  }
 
   const getStatusStyle = (status: Flight['status']) => {
     switch (status) {
@@ -237,13 +264,31 @@ export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({
       {/* Selected Flight Dense Detail Drawer */}
       {selectedFlight && (
         <div className="bg-slate-50 border-t border-slate-200 p-5 space-y-4">
-          <div className="flex justify-between items-center">
+          <div className="flex justify-between items-center mb-2">
             <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
               Telemetry Detail
             </h3>
             <span className="text-[9px] font-mono text-slate-400">
               SQUAWK: <MonoText className="text-[9px] text-slate-700">{selectedFlight.squawk}</MonoText>
             </span>
+          </div>
+
+          {/* New Route Info Section */}
+          <div className="pb-3 mb-3 border-b border-slate-200">
+            {loadingRoute ? (
+               <div className="text-[10px] text-slate-500 font-bold tracking-widest animate-pulse">LOADING ROUTE...</div>
+            ) : routeData ? (
+               <div className="flex flex-col">
+                 <div className="text-lg font-bold text-slate-900 tracking-wide uppercase">
+                   {routeData.origin} → {routeData.destination}
+                 </div>
+                 <div className="text-[10px] text-slate-500 font-medium uppercase mt-1">
+                   {routeData.airline}
+                 </div>
+               </div>
+            ) : (
+               <div className="text-[10px] text-slate-500 font-bold tracking-widest">ROUTE UNAVAILABLE</div>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-y-3 gap-x-4">
@@ -293,17 +338,34 @@ export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({
             </div>
             
             <div className="col-span-2 space-y-0.5 mt-2 pt-2 border-t border-slate-200">
-              <p className="text-[9px] text-slate-400 uppercase">ML ETA (BETA)</p>
+              <p className="text-[9px] text-slate-400 uppercase">ETA (BETA)</p>
               <p className="text-[11px] font-medium text-slate-900">
                 {isETALoading ? (
                   <span className="text-slate-500 italic animate-pulse">CALCULATING...</span>
-                ) : predictedETA !== null ? (
+                ) : mlEtaMinutes !== null ? (
                   <>
-                    <MonoText className="text-[11px] font-bold text-indigo-600">{predictedETA}</MonoText>
+                    <MonoText className="text-[11px] font-bold text-indigo-600">{mlEtaMinutes}</MonoText>
                     <span className="text-[8px] text-slate-400 font-normal ml-1">MIN</span>
                   </>
                 ) : (
                   <span className="text-slate-400">N/A</span>
+                )}
+              </p>
+            </div>
+
+            <div className="col-span-2 space-y-0.5 pt-1">
+              <p className="text-[9px] text-slate-400 uppercase">Predicted Delay</p>
+              <p className="text-[11px] font-medium">
+                {isETALoading || loadingRoute ? (
+                  <span className="text-slate-500 italic animate-pulse uppercase">CALCULATING DELAY...</span>
+                ) : isDelayCalculated ? (
+                  delayMinutes > 0 ? (
+                    <span className="font-bold text-red-600">DELAY: +{delayMinutes} MIN</span>
+                  ) : (
+                    <span className="font-bold text-emerald-600">ON TIME</span>
+                  )
+                ) : (
+                  <span className="text-slate-400 uppercase">N/A</span>
                 )}
               </p>
             </div>
