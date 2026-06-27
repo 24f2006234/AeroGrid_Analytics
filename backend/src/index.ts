@@ -141,11 +141,39 @@ app.get('/api/route/:callsign', async (req, res) => {
             return res.json(defaultResponse);
         }
 
+        let startLat, startLng, endLat, endLng;
+
+        if (data.dep_iata && data.arr_iata) {
+            try {
+                const airportsUrl = `https://airlabs.co/api/v9/airports?iata_code=${data.dep_iata},${data.arr_iata}&api_key=${process.env.AIRLABS_API_KEY}`;
+                const airportsResponse = await axios.get(airportsUrl);
+                const airports = airportsResponse.data?.response;
+                if (Array.isArray(airports)) {
+                    const depAirport = airports.find((a: any) => a.iata_code === data.dep_iata);
+                    const arrAirport = airports.find((a: any) => a.iata_code === data.arr_iata);
+                    if (depAirport) {
+                        startLat = depAirport.lat;
+                        startLng = depAirport.lng;
+                    }
+                    if (arrAirport) {
+                        endLat = arrAirport.lat;
+                        endLng = arrAirport.lng;
+                    }
+                }
+            } catch (err) {
+                console.error(`Error fetching airport coords for ${data.dep_iata}, ${data.arr_iata}`, err);
+            }
+        }
+
         return res.json({
             origin: data.dep_iata || "N/A",
             destination: data.arr_iata || "N/A",
             airline: data.airline_name || "Unknown Airline",
-            scheduledArrivalTS: data.arr_time_ts ?? null
+            scheduledArrivalTS: data.arr_time_ts ?? null,
+            startLat,
+            startLng,
+            endLat,
+            endLng
         });
     } catch (error: unknown) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
