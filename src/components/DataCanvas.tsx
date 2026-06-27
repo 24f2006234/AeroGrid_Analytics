@@ -7,9 +7,36 @@ interface DataCanvasProps {
   flights: Flight[];
   selectedIcao: string | null;
   setSelectedIcao: (icao: string | null) => void;
+  activeArc: any[];
 }
 
-export const DataCanvas: React.FC<DataCanvasProps> = ({ flights, selectedIcao, setSelectedIcao }) => {
+// Generate textures outside component for WebGL performance (reuse)
+const generatePlaneTexture = (color: string) => {
+  const canvas = document.createElement('canvas');
+  canvas.width = 64;
+  canvas.height = 64;
+  const ctx = canvas.getContext('2d');
+  if (ctx) {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    // Chevron pointing UP (0 radians)
+    ctx.moveTo(32, 10);
+    ctx.lineTo(50, 50);
+    ctx.lineTo(32, 40);
+    ctx.lineTo(14, 50);
+    ctx.closePath();
+    ctx.fill();
+  }
+  return new THREE.CanvasTexture(canvas);
+};
+
+const normalTexture = generatePlaneTexture('#3b82f6');
+const selectedTexture = generatePlaneTexture('#10b981');
+const errorTexture = generatePlaneTexture('#ef4444');
+const warningTexture = generatePlaneTexture('#f59e0b');
+
+
+export const DataCanvas: React.FC<DataCanvasProps> = ({ flights, selectedIcao, setSelectedIcao, activeArc }) => {
   const globeEl = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   
@@ -35,6 +62,13 @@ export const DataCanvas: React.FC<DataCanvasProps> = ({ flights, selectedIcao, s
     observer.observe(containerRef.current);
     return () => observer.disconnect();
   }, []);
+
+  const selectedFlight = flights.find(f => f.icao24 === selectedIcao);
+  const dynamicArcs = selectedFlight && activeArc.length > 0 ? [{
+    ...activeArc[0],
+    startLat: selectedFlight.latitude,
+    startLng: selectedFlight.longitude
+  }] : [];
 
   useEffect(() => {
     // Center globe on a viewpoint matching the backend airspace bounds (India)
@@ -67,20 +101,33 @@ export const DataCanvas: React.FC<DataCanvasProps> = ({ flights, selectedIcao, s
             polygonSideColor={() => '#f1f5f9'}
             polygonStrokeColor={() => '#cbd5e1'}
             
-            objectsData={flights}
-            objectLat="latitude"
-            objectLng="longitude"
-            objectAltitude={(d: any) => Math.max(0.01, d.altitude / 200000)}
+            customLayerData={flights}
+            onCustomLayerClick={(obj: any) => setSelectedIcao(obj.icao24)}
             onObjectClick={(obj: any) => setSelectedIcao(obj.icao24)}
-            objectThreeObject={(d: any) => {
+            customThreeObject={(d: any) => {
               const isSelected = d.icao24 === selectedIcao;
-              const color = isSelected ? '#10b981' : d.status === 'ERROR' ? '#ef4444' : d.status === 'WARNING' ? '#f59e0b' : '#3b82f6';
-              const scale = isSelected ? 1.5 : 1;
-              return new THREE.Mesh(
-                new THREE.SphereGeometry(0.4 * scale, 16, 16),
-                new THREE.MeshLambertMaterial({ color })
-              );
+              const texture = isSelected ? selectedTexture : d.status === 'ERROR' ? errorTexture : d.status === 'WARNING' ? warningTexture : normalTexture;
+              
+              const material = new THREE.SpriteMaterial({ map: texture, depthWrite: false });
+              // Rotate based on heading (heading 0 = true north, we rotate canvas counter-clockwise)
+              material.rotation = -d.heading * (Math.PI / 180);
+              
+              const sprite = new THREE.Sprite(material);
+              const scale = isSelected ? 3.5 : 2.5;
+              sprite.scale.set(scale, scale, 1);
+              
+              if (globeEl.current) {
+                // Keep sprites near the surface to avoid visual parallax disconnection from surface arcs
+                const coords = globeEl.current.getCoords(d.latitude, d.longitude, 0.01);
+                sprite.position.set(coords.x, coords.y, coords.z);
+              }
+              return sprite;
             }}
+            arcsData={dynamicArcs}
+            arcColor={() => '#10b981'}
+            arcDashLength={0.4}
+            arcDashGap={0.2}
+            arcDashAnimateTime={1500}
           />
         )}
       </div>
