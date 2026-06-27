@@ -33,6 +33,7 @@ interface TelemetryPanelProps {
   isError: boolean;
   selectedIcao: string | null;
   setSelectedIcao: (icao: string | null) => void;
+  setActiveArc: (arc: any[]) => void;
 }
 
 export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({
@@ -45,8 +46,9 @@ export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({
   isError,
   selectedIcao,
   setSelectedIcao,
+  setActiveArc,
 }) => {
-  const [routeData, setRouteData] = useState<{ origin: string; destination: string; airline: string; scheduledArrivalTS: number | null } | null>(null);
+  const [routeData, setRouteData] = useState<{ origin: string; destination: string; airline: string; scheduledArrivalTS: number | null; startLat?: number; startLng?: number; endLat?: number; endLng?: number } | null>(null);
   const [mlEtaMinutes, setMlEtaMinutes] = useState<number | null>(null);
   const [loadingRoute, setLoadingRoute] = useState<boolean>(false);
   const [isETALoading, setIsETALoading] = useState<boolean>(false);
@@ -96,9 +98,24 @@ export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({
       fetch(`http://localhost:5000/api/route/${selectedFlight.callsign}`)
         .then((res) => res.json())
         .then((data) => {
-          if (isMounted) setRouteData(data);
+          if (isMounted) {
+            setRouteData(data);
+            if (typeof data.endLat === 'number' && typeof data.endLng === 'number') {
+              setActiveArc([{
+                startLat: selectedFlight.latitude,
+                startLng: selectedFlight.longitude,
+                endLat: data.endLat,
+                endLng: data.endLng
+              }]);
+            } else {
+              setActiveArc([]);
+            }
+          }
         })
-        .catch((err) => console.error('Failed to fetch Route:', err))
+        .catch((err) => {
+          console.error('Failed to fetch Route:', err);
+          if (isMounted) setActiveArc([]);
+        })
         .finally(() => {
           if (isMounted) setLoadingRoute(false);
         });
@@ -137,6 +154,7 @@ export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({
     } else {
       setRouteData(null);
       setMlEtaMinutes(null);
+      setActiveArc([]);
     }
     
     return () => {

@@ -12,6 +12,7 @@ const App: React.FC = () => {
 
   const { flights, isLoading, isError, refreshData } = useLiveTelemetry();
   const [selectedIcao, setSelectedIcao] = useState<string | null>(null);
+  const [activeArc, setActiveArc] = useState<any[]>([]);
 
   const filteredGlobeFlights = React.useMemo(() => {
     return flights.filter(
@@ -35,7 +36,8 @@ const App: React.FC = () => {
       <DataCanvas 
         flights={filteredGlobeFlights} 
         selectedIcao={selectedIcao} 
-        setSelectedIcao={setSelectedIcao} 
+        setSelectedIcao={setSelectedIcao}
+        activeArc={activeArc}
       />
       <TelemetryPanel
         searchQuery={searchQuery}
@@ -47,6 +49,7 @@ const App: React.FC = () => {
         isError={isError}
         selectedIcao={selectedIcao}
         setSelectedIcao={setSelectedIcao}
+        setActiveArc={setActiveArc}
       />
     </div>
   );
