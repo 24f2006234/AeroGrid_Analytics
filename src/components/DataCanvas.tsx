@@ -65,9 +65,7 @@ export const DataCanvas: React.FC<DataCanvasProps> = ({ flights, selectedIcao, s
 
   const selectedFlight = flights.find(f => f.icao24 === selectedIcao);
   const dynamicArcs = selectedFlight && activeArc.length > 0 ? [{
-    ...activeArc[0],
-    startLat: selectedFlight.latitude,
-    startLng: selectedFlight.longitude
+    ...activeArc[0]
   }] : [];
 
   useEffect(() => {
@@ -124,10 +122,9 @@ export const DataCanvas: React.FC<DataCanvasProps> = ({ flights, selectedIcao, s
               return sprite;
             }}
             arcsData={dynamicArcs}
-            arcColor={() => '#10b981'}
-            arcDashLength={0.4}
-            arcDashGap={0.2}
-            arcDashAnimateTime={1500}
+            arcColor={() => '#475569'}
+            arcDashLength={0.05}
+            arcDashGap={0.05}
           />
         )}
       </div>

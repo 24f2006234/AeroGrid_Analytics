@@ -92,6 +92,7 @@ export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({
     if (selectedFlight) {
       setRouteData(null);
       setMlEtaMinutes(null);
+      setActiveArc([]);
       setLoadingRoute(true);
       setIsETALoading(true);
 
@@ -102,8 +103,8 @@ export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({
             setRouteData(data);
             if (typeof data.endLat === 'number' && typeof data.endLng === 'number') {
               setActiveArc([{
-                startLat: selectedFlight.latitude,
-                startLng: selectedFlight.longitude,
+                startLat: typeof data.startLat === 'number' ? data.startLat : selectedFlight.latitude,
+                startLng: typeof data.startLng === 'number' ? data.startLng : selectedFlight.longitude,
                 endLat: data.endLat,
                 endLng: data.endLng
               }]);
