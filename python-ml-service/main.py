@@ -84,7 +84,7 @@ def predict_eta(flight: FlightTelemetry):
     eta_seconds = float(prediction.item())
 
     return {
-        "eta_seconds": max(0, round(eta_seconds)), # Prevent negative time
+        "eta_seconds": max(0, round(eta_seconds)), # Prevent negative time (updated weights loader)
         "eta_minutes": max(0, round(eta_seconds / 60, 2))
     }
 

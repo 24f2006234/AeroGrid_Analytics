@@ -43,17 +43,23 @@ def prepare_dataset(input_csv="flight_dataset.csv", output_csv="training_data.cs
     # Find the distance to the closest hub for each ping
     df['min_dist_to_hub'] = df[dist_columns].min(axis=1)
 
+    # Group into individual flights by checking for timestamp gaps > 30 minutes
+    df['time_diff'] = df.groupby('icao24')['timestamp'].diff()
+    df['new_flight'] = (df['time_diff'] > 1800) | df['time_diff'].isnull()
+    df['flight_id'] = df.groupby('icao24')['new_flight'].cumsum()
+    df['flight_key'] = df['icao24'] + "_" + df['flight_id'].astype(str)
+
     print("Identifying arrival events...")
     # OpenSky altitude is in meters. 3048m is roughly 10,000 ft.
     # An aircraft is "arriving" if it is below 10,000 ft and descending (vertical_rate < 0)
     df['is_arriving'] = (df['altitude'] < 3048) & (df['vertical_rate'] < 0)
 
-    # Find the exact timestamp when each flight first crossed the arrival threshold
-    arrivals = df[df['is_arriving']].groupby('icao24')['timestamp'].min().reset_index()
+    # Find the exact timestamp when each flight crossed the arrival threshold
+    arrivals = df[df['is_arriving']].groupby('flight_key')['timestamp'].min().reset_index()
     arrivals.rename(columns={'timestamp': 'arrival_time'}, inplace=True)
 
     # Merge this target arrival time back into the main dataset
-    df = pd.merge(df, arrivals, on='icao24', how='inner')
+    df = pd.merge(df, arrivals, on='flight_key', how='inner')
 
     # Filter out data AFTER they arrived (we only want to train on the approach)
     df = df[df['timestamp'] < df['arrival_time']]
