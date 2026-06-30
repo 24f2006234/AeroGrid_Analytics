@@ -142,8 +142,10 @@ export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({
       })
         .then((res) => res.json())
         .then((data) => {
-          if (isMounted && data.eta_minutes !== undefined) {
-            setMlEtaMinutes(data.eta_minutes);
+          if (isMounted && data.eta_seconds !== undefined) {
+            const rawValue = data.eta_seconds;
+            const etaMinutes = Math.round((rawValue / 60) * 100) / 100;
+            setMlEtaMinutes(etaMinutes);
           }
         })
         .catch((err) => {
