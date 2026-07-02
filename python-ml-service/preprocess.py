@@ -50,9 +50,8 @@ def prepare_dataset(input_csv="flight_dataset.csv", output_csv="training_data.cs
     df['flight_key'] = df['icao24'] + "_" + df['flight_id'].astype(str)
 
     print("Identifying arrival events...")
-    # OpenSky altitude is in meters. 3048m is roughly 10,000 ft.
-    # An aircraft is "arriving" if it is below 10,000 ft and descending (vertical_rate < 0)
-    df['is_arriving'] = (df['altitude'] < 3048) & (df['vertical_rate'] < 0)
+    
+    df['is_arriving'] = (df['altitude'] < 1000) & (df['vertical_rate'] <= 0)
 
     # Find the exact timestamp when each flight crossed the arrival threshold
     arrivals = df[df['is_arriving']].groupby('flight_key')['timestamp'].min().reset_index()

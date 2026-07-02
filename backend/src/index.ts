@@ -170,6 +170,7 @@ app.get('/api/route/:callsign', async (req, res) => {
             destination: data.arr_iata || "N/A",
             airline: data.airline_name || "Unknown Airline",
             scheduledArrivalTS: data.arr_time_ts ?? null,
+            estimatedArrivalTS: data.arr_estimated_ts ?? null,
             startLat,
             startLng,
             endLat,

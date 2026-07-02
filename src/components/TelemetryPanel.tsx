@@ -48,7 +48,7 @@ export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({
   setSelectedIcao,
   setActiveArc,
 }) => {
-  const [routeData, setRouteData] = useState<{ origin: string; destination: string; airline: string; scheduledArrivalTS: number | null; startLat?: number; startLng?: number; endLat?: number; endLng?: number } | null>(null);
+  const [routeData, setRouteData] = useState<{ origin: string; destination: string; airline: string; scheduledArrivalTS: number | null; estimatedArrivalTS?: number | null; startLat?: number; startLng?: number; endLat?: number; endLng?: number } | null>(null);
   const [mlEtaMinutes, setMlEtaMinutes] = useState<number | null>(null);
   const [loadingRoute, setLoadingRoute] = useState<boolean>(false);
   const [isETALoading, setIsETALoading] = useState<boolean>(false);
@@ -98,10 +98,21 @@ export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({
 
       fetch(`http://localhost:5000/api/route/${selectedFlight.callsign}`)
         .then((res) => res.json())
+        .catch((err) => {
+          console.error('Failed to fetch Route:', err);
+          return null;
+        })
         .then((data) => {
-          if (isMounted) {
+          if (!isMounted) return;
+
+          let endLat: number | undefined = undefined;
+          let endLng: number | undefined = undefined;
+
+          if (data) {
             setRouteData(data);
             if (typeof data.endLat === 'number' && typeof data.endLng === 'number') {
+              endLat = data.endLat;
+              endLng = data.endLng;
               setActiveArc([{
                 startLat: typeof data.startLat === 'number' ? data.startLat : selectedFlight.latitude,
                 startLng: typeof data.startLng === 'number' ? data.startLng : selectedFlight.longitude,
@@ -111,48 +122,43 @@ export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({
             } else {
               setActiveArc([]);
             }
+          } else {
+            setActiveArc([]);
           }
-        })
-        .catch((err) => {
-          console.error('Failed to fetch Route:', err);
-          if (isMounted) setActiveArc([]);
-        })
-        .finally(() => {
-          if (isMounted) setLoadingRoute(false);
-        });
+          setLoadingRoute(false);
 
-      const dynamicDistance = getDistanceToClosestHub(selectedFlight.latitude, selectedFlight.longitude);
-
-      fetch('http://localhost:8000/predict-eta', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          // Convert Knots back to Meters/Second
-          velocity: selectedFlight.speed / 1.94384, 
-          
-          // Convert Feet back to Meters
-          altitude: selectedFlight.altitude / 3.28084, 
-          
-          heading: selectedFlight.heading,
-          vertical_rate: selectedFlight.verticalRate, // Already in m/s
-          min_dist_to_hub: dynamicDistance // Kept as Kilometers
-        }),
-      })
-        .then((res) => res.json())
-        .then((data) => {
-          if (isMounted && data.eta_seconds !== undefined) {
-            const rawValue = data.eta_seconds;
-            const etaMinutes = Math.round((rawValue / 60) * 100) / 100;
-            setMlEtaMinutes(etaMinutes);
+          let dynamicDistance = getDistanceToClosestHub(selectedFlight.latitude, selectedFlight.longitude);
+          if (endLat !== undefined && endLng !== undefined) {
+            dynamicDistance = calculateHaversineDistance(selectedFlight.latitude, selectedFlight.longitude, endLat, endLng);
           }
-        })
-        .catch((err) => {
-          console.error('Failed to fetch ML ETA:', err);
-        })
-        .finally(() => {
-          if (isMounted) setIsETALoading(false);
+
+          fetch('http://localhost:8000/predict-eta', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              velocity: selectedFlight.speed / 1.94384,
+              altitude: selectedFlight.altitude / 3.28084,
+              heading: selectedFlight.heading,
+              vertical_rate: selectedFlight.verticalRate,
+              min_dist_to_hub: dynamicDistance
+            }),
+          })
+            .then((res) => res.json())
+            .then((etaData) => {
+              if (isMounted && etaData.eta_seconds !== undefined) {
+                const rawValue = etaData.eta_seconds;
+                const etaMinutes = Math.round((rawValue / 60) * 100) / 100;
+                setMlEtaMinutes(etaMinutes);
+              }
+            })
+            .catch((err) => {
+              console.error('Failed to fetch ML ETA:', err);
+            })
+            .finally(() => {
+              if (isMounted) setIsETALoading(false);
+            });
         });
     } else {
       setRouteData(null);
@@ -176,11 +182,16 @@ export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({
 
   let delayMinutes = 0;
   let isDelayCalculated = false;
-  if (mlEtaMinutes !== null && routeData?.scheduledArrivalTS) {
+  
+  if (routeData?.scheduledArrivalTS && routeData?.estimatedArrivalTS) {
+    const delaySeconds = routeData.estimatedArrivalTS - routeData.scheduledArrivalTS;
+    delayMinutes = Math.round(delaySeconds / 60);
+    isDelayCalculated = true;
+  } else if (mlEtaMinutes !== null && routeData?.scheduledArrivalTS) {
     const currentTimeTS = Math.floor(Date.now() / 1000);
     const predictedArrivalTS = currentTimeTS + (mlEtaMinutes * 60);
     const delaySeconds = predictedArrivalTS - routeData.scheduledArrivalTS;
-    delayMinutes = delaySeconds > 0 ? Math.round(delaySeconds / 60) : 0;
+    delayMinutes = Math.round(delaySeconds / 60);
     isDelayCalculated = true;
   }
 
@@ -411,6 +422,8 @@ export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({
                 ) : isDelayCalculated ? (
                   delayMinutes > 0 ? (
                     <span className="font-bold text-red-600">DELAY: +{delayMinutes} MIN</span>
+                  ) : delayMinutes < 0 ? (
+                    <span className="font-bold text-emerald-600">EARLY: {Math.abs(delayMinutes)} MIN</span>
                   ) : (
                     <span className="font-bold text-emerald-600">ON TIME</span>
                   )
