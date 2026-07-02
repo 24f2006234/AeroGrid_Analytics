@@ -10,6 +10,17 @@ The system is composed of three primary subsystems:
 * **API Gateway (`/backend`)**: A robust Node.js and Express server written in TypeScript. It handles data routing, client requests, and orchestration between the user interface and the analytics engine.
 * **Machine Learning Engine (`/python-ml-service`)**: A scalable FastAPI application running a PyTorch neural network. It calculates precise flight ETAs based on live telemetry features including velocity, altitude, heading, vertical rate, and hub proximity. The model execution is hardware-accelerated via `torch_directml`.
 
+## Technology Stack
+
+* **Frontend**: React 19, TypeScript, Vite, Tailwind CSS 4, `react-globe.gl`, Three.js
+* **Backend API Gateway**: Node.js, Express.js, TypeScript, Axios
+* **Machine Learning Engine**: Python, FastAPI, PyTorch (accelerated via `torch_directml`), scikit-learn, Pandas
+
+## External APIs
+
+* **OpenSky Network API**: Provides real-time flight telemetry and state vectors for tracking active flights within the designated airspace.
+* **AirLabs API**: Supplies comprehensive flight route data including origins, destinations, airline information, airport coordinates, and estimated arrival schedules.
+
 ## Development Setup
 
 To run the platform locally, you will need to initialize each of the three subsystems.
