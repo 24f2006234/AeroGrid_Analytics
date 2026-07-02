@@ -1,7 +1,15 @@
 # AeroGrid Analytics
 
+![React](https://img.shields.io/badge/react-%2320232a.svg?style=for-the-badge&logo=react&logoColor=%2361DAFB)
+![NodeJS](https://img.shields.io/badge/node.js-6DA55F?style=for-the-badge&logo=node.js&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-005571?style=for-the-badge&logo=fastapi)
+![PyTorch](https://img.shields.io/badge/PyTorch-%23EE4C2C.svg?style=for-the-badge&logo=PyTorch&logoColor=white)
+
 AeroGrid Aviation Intelligence Platform is a comprehensive telemetry and flight operations monitoring system. It provides real-time airspace visualization, telemetry tracking, and machine learning-powered predictions for estimated times of arrival (ETA).
 
+![Dashboard View 1](assets/dashboard1.png)
+
+![Dashboard View 2](assets/dashboard2.png)
 ## Architecture Overview
 
 The system is composed of three primary subsystems:
@@ -10,15 +18,51 @@ The system is composed of three primary subsystems:
 * **API Gateway (`/backend`)**: A robust Node.js and Express server written in TypeScript. It handles data routing, client requests, and orchestration between the user interface and the analytics engine.
 * **Machine Learning Engine (`/python-ml-service`)**: A scalable FastAPI application running a PyTorch neural network. It calculates precise flight ETAs based on live telemetry features including velocity, altitude, heading, vertical rate, and hub proximity. The model execution is hardware-accelerated via `torch_directml`.
 
+## ETA Prediction Engine
+
+The ETA engine is built as an independent FastAPI microservice.
+
+Input Features:
+
+- Latitude
+- Longitude
+- Velocity
+- Heading
+- Vertical Rate
+- Altitude
+- Airport Distance
+- Route Information
+
+Output:
+
+- Predicted ETA
+- Remaining Flight Time
+
+Now recruiters immediately understand what the AI does.
+
 ## Technology Stack
 
-* **Frontend**: React 19, TypeScript, Vite, Tailwind CSS 4, `react-globe.gl`, Three.js
-* **Backend API Gateway**: Node.js, Express.js, TypeScript, Axios
-* **Machine Learning Engine**: Python, FastAPI, PyTorch (accelerated via `torch_directml`), scikit-learn, Pandas
+| Layer | Technologies |
+|---|---|
+| Frontend | React, TypeScript, Vite, Tailwind CSS |
+| Visualization | react-globe.gl, Three.js |
+| Backend | Node.js, Express, TypeScript |
+| Machine Learning | FastAPI, PyTorch, scikit-learn |
+| APIs | OpenSky, AirLabs |
 
 ## External APIs
 
-* **OpenSky Network API**: Provides real-time flight telemetry and state vectors for tracking active flights within the designated airspace.
+* **OpenSky Network**
+
+Provides live ADS-B flight telemetry including:
+
+- Position
+- Velocity
+- Heading
+- Altitude
+- Vertical Rate
+
+Shows aviation knowledge.
 * **AirLabs API**: Supplies comprehensive flight route data including origins, destinations, airline information, airport coordinates, and estimated arrival schedules.
 
 ## Development Setup
