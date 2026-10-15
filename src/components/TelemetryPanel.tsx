@@ -3,24 +3,53 @@ import { Flight } from '../types';
 import { MonoText } from './MonoText';
 
 const AVIATION_HUBS = [
-  { name: 'DEL', lat: 28.5562, lon: 77.1000 },
+  { name: 'DEL', lat: 28.5562, lon: 77.1 },
   { name: 'BOM', lat: 19.0896, lon: 72.8656 },
   { name: 'BLR', lat: 13.1986, lon: 77.7066 },
-  { name: 'CCU', lat: 22.6520, lon: 88.4467 }
+  { name: 'CCU', lat: 22.652, lon: 88.4467 },
 ];
 
-const calculateHaversineDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
-  const R = 6371.0; 
+const calculateHaversineDistance = (
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number
+): number => {
+  const R = 6371.0;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
   const dLon = ((lon2 - lon1) * Math.PI) / 180;
-  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-            Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
   return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
 };
 
 const getDistanceToClosestHub = (flightLat: number, flightLon: number): number => {
-  const distances = AVIATION_HUBS.map(hub => calculateHaversineDistance(flightLat, flightLon, hub.lat, hub.lon));
+  const distances = AVIATION_HUBS.map((hub) =>
+    calculateHaversineDistance(flightLat, flightLon, hub.lat, hub.lon)
+  );
   return Math.min(...distances);
+};
+
+const formatEtaDuration = (minutes: number): string => {
+  if (minutes < 1) {
+    return `${Math.max(1, Math.round(minutes * 60))}s`;
+  }
+  const totalSeconds = Math.round(minutes * 60);
+  const hrs = Math.floor(totalSeconds / 3600);
+  const mins = Math.floor((totalSeconds % 3600) / 60);
+  const secs = totalSeconds % 60;
+
+  if (hrs > 0) {
+    return `${hrs}h ${mins}m`;
+  }
+  if (secs > 0) {
+    return `${mins}m ${secs}s`;
+  }
+  return `${mins} min`;
 };
 
 interface TelemetryPanelProps {
@@ -48,11 +77,20 @@ export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({
   setSelectedIcao,
   setActiveArc,
 }) => {
-  const [routeData, setRouteData] = useState<{ origin: string; destination: string; airline: string; scheduledArrivalTS: number | null; estimatedArrivalTS?: number | null; startLat?: number; startLng?: number; endLat?: number; endLng?: number } | null>(null);
+  const [routeData, setRouteData] = useState<{
+    origin: string;
+    destination: string;
+    airline: string;
+    scheduledArrivalTS: number | null;
+    estimatedArrivalTS?: number | null;
+    startLat?: number;
+    startLng?: number;
+    endLat?: number;
+    endLng?: number;
+  } | null>(null);
   const [mlEtaMinutes, setMlEtaMinutes] = useState<number | null>(null);
   const [loadingRoute, setLoadingRoute] = useState<boolean>(false);
   const [isETALoading, setIsETALoading] = useState<boolean>(false);
-
 
   useEffect(() => {
     if (flights.length > 0 && !selectedIcao) {
@@ -85,7 +123,8 @@ export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({
     return matchesSearch && matchesStatus && matchesAltitude;
   });
 
-  const selectedFlight = flights.find((f) => f.icao24 === selectedIcao) || filteredFlights[0];
+  const selectedFlight =
+    flights.find((f) => f.icao24 === selectedIcao) || filteredFlights[0];
 
   useEffect(() => {
     let isMounted = true;
@@ -113,12 +152,20 @@ export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({
             if (typeof data.endLat === 'number' && typeof data.endLng === 'number') {
               endLat = data.endLat;
               endLng = data.endLng;
-              setActiveArc([{
-                startLat: typeof data.startLat === 'number' ? data.startLat : selectedFlight.latitude,
-                startLng: typeof data.startLng === 'number' ? data.startLng : selectedFlight.longitude,
-                endLat: data.endLat,
-                endLng: data.endLng
-              }]);
+              setActiveArc([
+                {
+                  startLat:
+                    typeof data.startLat === 'number'
+                      ? data.startLat
+                      : selectedFlight.latitude,
+                  startLng:
+                    typeof data.startLng === 'number'
+                      ? data.startLng
+                      : selectedFlight.longitude,
+                  endLat: data.endLat,
+                  endLng: data.endLng,
+                },
+              ]);
             } else {
               setActiveArc([]);
             }
@@ -127,9 +174,17 @@ export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({
           }
           setLoadingRoute(false);
 
-          let dynamicDistance = getDistanceToClosestHub(selectedFlight.latitude, selectedFlight.longitude);
+          let dynamicDistance = getDistanceToClosestHub(
+            selectedFlight.latitude,
+            selectedFlight.longitude
+          );
           if (endLat !== undefined && endLng !== undefined) {
-            dynamicDistance = calculateHaversineDistance(selectedFlight.latitude, selectedFlight.longitude, endLat, endLng);
+            dynamicDistance = calculateHaversineDistance(
+              selectedFlight.latitude,
+              selectedFlight.longitude,
+              endLat,
+              endLng
+            );
           }
 
           fetch('http://localhost:8000/predict-eta', {
@@ -142,7 +197,7 @@ export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({
               altitude: selectedFlight.altitude / 3.28084,
               heading: selectedFlight.heading,
               vertical_rate: selectedFlight.verticalRate,
-              min_dist_to_hub: dynamicDistance
+              min_dist_to_hub: dynamicDistance,
             }),
           })
             .then((res) => res.json())
@@ -165,7 +220,7 @@ export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({
       setMlEtaMinutes(null);
       setActiveArc([]);
     }
-    
+
     return () => {
       isMounted = false;
     };
@@ -177,74 +232,95 @@ export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({
     selectedFlight?.heading,
     selectedFlight?.verticalRate,
     selectedFlight?.latitude,
-    selectedFlight?.longitude
+    selectedFlight?.longitude,
+    setActiveArc,
   ]);
 
   let delayMinutes = 0;
   let isDelayCalculated = false;
-  
+
   if (routeData?.scheduledArrivalTS && routeData?.estimatedArrivalTS) {
     const delaySeconds = routeData.estimatedArrivalTS - routeData.scheduledArrivalTS;
     delayMinutes = Math.round(delaySeconds / 60);
     isDelayCalculated = true;
   } else if (mlEtaMinutes !== null && routeData?.scheduledArrivalTS) {
     const currentTimeTS = Math.floor(Date.now() / 1000);
-    const predictedArrivalTS = currentTimeTS + (mlEtaMinutes * 60);
+    const predictedArrivalTS = currentTimeTS + mlEtaMinutes * 60;
     const delaySeconds = predictedArrivalTS - routeData.scheduledArrivalTS;
     delayMinutes = Math.round(delaySeconds / 60);
     isDelayCalculated = true;
   }
 
-  const getStatusStyle = (status: Flight['status']) => {
+  const getStatusBadge = (status: Flight['status']) => {
     switch (status) {
       case 'ACTIVE':
-        return 'bg-blue-50 border-blue-200 text-blue-700';
+        return (
+          <span className="px-1.5 py-0.5 text-[9px] font-mono font-semibold rounded bg-emerald-950/80 border border-emerald-800/60 text-emerald-300">
+            ACTIVE
+          </span>
+        );
       case 'WARNING':
-        return 'bg-amber-50 border-amber-200 text-amber-700';
+        return (
+          <span className="px-1.5 py-0.5 text-[9px] font-mono font-semibold rounded bg-amber-950/80 border border-amber-800/60 text-amber-300">
+            CAUTION
+          </span>
+        );
       case 'ERROR':
-        return 'bg-red-50 border-red-200 text-red-700';
+        return (
+          <span className="px-1.5 py-0.5 text-[9px] font-mono font-semibold rounded bg-rose-950/80 border border-rose-800/60 text-rose-300">
+            ALERT
+          </span>
+        );
       default:
-        return 'bg-slate-50 border-slate-200 text-slate-700';
+        return (
+          <span className="px-1.5 py-0.5 text-[9px] font-mono font-semibold rounded bg-slate-800 border border-slate-700 text-slate-300">
+            {status}
+          </span>
+        );
     }
   };
 
   const formatCoordinates = (lat: number, lon: number) => {
-    return `${Math.abs(lat).toFixed(2)}°${lat >= 0 ? 'N' : 'S'} / ${Math.abs(lon).toFixed(2)}°${lon >= 0 ? 'E' : 'W'}`;
+    return `${Math.abs(lat).toFixed(2)}°${lat >= 0 ? 'N' : 'S'}, ${Math.abs(lon).toFixed(2)}°${lon >= 0 ? 'E' : 'W'}`;
   };
 
   return (
-    <section className="flex flex-col h-full bg-white border-l border-slate-200 overflow-hidden">
+    <section className="flex flex-col h-full bg-[#0b0f19] border-l border-[#1e293b] text-slate-200 overflow-hidden select-none">
       {/* Header */}
-      <div className="px-6 py-5 border-b border-slate-200">
+      <div className="px-5 py-3.5 border-b border-[#1e293b] bg-[#0d1322]">
         <div className="flex justify-between items-center">
-          <h2 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
-            Live Telemetry Feed
-          </h2>
-          <span className="flex items-center gap-1.5 px-2 py-0.5 text-[9px] font-bold font-mono bg-slate-100 border border-slate-200 rounded-sm text-slate-600">
-            TOTAL: {filteredFlights.length}
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+            <h2 className="text-xs font-mono font-bold text-slate-100 uppercase tracking-wider">
+              Surveillance Feed
+            </h2>
+          </div>
+          <span className="px-2 py-0.5 text-[10px] font-mono font-semibold bg-[#162032] border border-[#1e293b] rounded text-slate-300">
+            {filteredFlights.length} Targets
           </span>
         </div>
       </div>
 
       {/* Flight Cards Feed */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-2">
+      <div className="flex-1 overflow-y-auto p-3 space-y-2">
         {isLoading ? (
-          <div className="text-center py-8 text-[10px] text-slate-400 font-medium uppercase tracking-wider">
-            Initializing Uplink...
+          <div className="flex flex-col items-center justify-center py-12 text-slate-400">
+            <div className="w-5 h-5 border-2 border-sky-400 border-t-transparent rounded-full animate-spin mb-3"></div>
+            <p className="text-xs font-mono">Acquiring ADS-B telemetry...</p>
           </div>
         ) : isError ? (
-          <div className="text-center py-8 border border-red-200 bg-red-50 rounded-sm">
-            <p className="text-[10px] text-red-700 font-bold uppercase tracking-wider">
-              CONNECTION LOST
+          <div className="p-4 rounded bg-rose-950/40 border border-rose-800/50 text-center">
+            <p className="text-xs font-mono font-bold text-rose-300 uppercase">
+              Telemetry Receiver Offline
             </p>
-            <p className="text-[9px] text-red-600 mt-1 uppercase">
-              System Offline
+            <p className="text-[10px] font-mono text-rose-400/80 mt-1">
+              Unable to establish uplink with local receiver gateway
             </p>
           </div>
         ) : filteredFlights.length === 0 ? (
-          <div className="text-center py-8 border border-dashed border-slate-200 rounded-sm">
-            <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">
-              No matching transponders
+          <div className="p-8 text-center border border-dashed border-[#1e293b] rounded">
+            <p className="text-xs font-mono text-slate-400">
+              No aircraft match current filter criteria
             </p>
           </div>
         ) : (
@@ -255,64 +331,70 @@ export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({
                 key={flight.icao24}
                 id={`flight-card-${flight.icao24}`}
                 onClick={() => setSelectedIcao(flight.icao24)}
-                className={`p-3 border rounded-sm transition-all cursor-pointer ${
+                className={`p-3 rounded border transition-all cursor-pointer ${
                   isSelected
-                    ? 'border-slate-900 bg-slate-50/50'
-                    : 'border-slate-200 hover:border-slate-300 bg-white'
+                    ? 'bg-[#131d30] border-sky-500 shadow-sm'
+                    : 'bg-[#0f172a] border-[#1e293b] hover:border-[#334155] hover:bg-[#121c2e]'
                 }`}
               >
                 {/* Card Top Line */}
                 <div className="flex justify-between items-start mb-2">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-slate-950 font-sans">
-                      {flight.callsign || 'UNKNOWN'}
+                    <span className="text-xs font-mono font-bold text-slate-100">
+                      {flight.callsign || 'NO CALLSIGN'}
                     </span>
-                    <span className="text-[9px] text-slate-400 font-mono uppercase">
+                    <span className="text-[10px] font-mono text-slate-400">
                       {flight.originCountry}
                     </span>
                   </div>
-                  <span
-                    className={`px-1.5 py-0.5 text-[8px] font-bold border rounded-sm ${getStatusStyle(
-                      flight.status
-                    )}`}
-                  >
-                    {flight.status}
-                  </span>
+                  {getStatusBadge(flight.status)}
                 </div>
 
                 {/* Card Secondary Line */}
-                <div className="flex justify-between items-center text-[10px] text-slate-500 font-medium mb-2.5">
-                  <span className="font-mono text-[9px]">
-                    {formatCoordinates(flight.latitude, flight.longitude)}
-                  </span>
-                  <div className="flex items-center gap-1">
+                <div className="flex justify-between items-center text-[10px] font-mono text-slate-400 mb-2">
+                  <span>{formatCoordinates(flight.latitude, flight.longitude)}</span>
+                  <div className="flex items-center gap-1 text-slate-300">
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
                       viewBox="0 0 24 24"
                       fill="none"
                       stroke="currentColor"
                       strokeWidth="2.5"
-                      className="w-2.5 h-2.5 text-slate-400"
+                      className="w-2.5 h-2.5 text-sky-400"
                       style={{ transform: `rotate(${flight.heading - 45}deg)` }}
                     >
                       <path d="M17.8 19.2 16 11l3.5-3.5A2.12 2.12 0 0 0 16.5 4L13 7.5l-8.2-1.8L3 7l7.5 4.5L7 15l-3-1L3 15l3.5 2.5L9 21l1-.5-1-3 4-3.5 4.5 7.5Z" />
                     </svg>
-                    <MonoText className="text-[10px]">{flight.heading}°</MonoText>
+                    <MonoText>{String(flight.heading).padStart(3, '0')}°</MonoText>
                   </div>
                 </div>
 
                 {/* Telemetry Metric Grid */}
-                <div className="grid grid-cols-2 gap-x-2 gap-y-1 pt-2 border-t border-slate-100">
-                  <div className="flex justify-between items-center">
-                    <span className="text-[9px] text-slate-400 font-sans uppercase">Altitude</span>
-                    <MonoText className="text-[10px] font-semibold text-slate-800">
-                      {flight.altitude.toLocaleString()} <span className="text-[8px] text-slate-400">FT</span>
+                <div className="grid grid-cols-3 gap-1 pt-2 border-t border-[#1e293b]/70 text-[10px] font-mono">
+                  <div>
+                    <span className="text-[9px] text-slate-500 block">ALTITUDE</span>
+                    <MonoText className="font-semibold text-slate-200">
+                      {flight.altitude.toLocaleString()} FT
                     </MonoText>
                   </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-[9px] text-slate-400 font-sans uppercase">Speed</span>
-                    <MonoText className="text-[10px] font-semibold text-slate-800">
-                      {flight.speed} <span className="text-[8px] text-slate-400">KT</span>
+                  <div>
+                    <span className="text-[9px] text-slate-500 block">SPEED</span>
+                    <MonoText className="font-semibold text-slate-200">
+                      {flight.speed} KT
+                    </MonoText>
+                  </div>
+                  <div>
+                    <span className="text-[9px] text-slate-500 block">V/S</span>
+                    <MonoText
+                      className={`font-semibold ${
+                        flight.verticalRate > 0.5
+                          ? 'text-emerald-400'
+                          : flight.verticalRate < -0.5
+                          ? 'text-amber-400'
+                          : 'text-slate-400'
+                      }`}
+                    >
+                      {flight.verticalRate > 0 ? `+${flight.verticalRate}` : flight.verticalRate} M/S
                     </MonoText>
                   </div>
                 </div>
@@ -324,133 +406,128 @@ export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({
 
       {/* Selected Flight Dense Detail Drawer */}
       {selectedFlight && (
-        <div className="bg-slate-50 border-t border-slate-200 p-5 space-y-4">
-          <div className="flex justify-between items-center mb-2">
-            <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-              Telemetry Detail
-            </h3>
-            <span className="text-[9px] font-mono text-slate-400">
-              SQUAWK: <MonoText className="text-[9px] text-slate-700">{selectedFlight.squawk}</MonoText>
+        <div className="bg-[#0e1526] border-t border-[#1e293b] p-4 space-y-3.5 select-none">
+          <div className="flex justify-between items-center pb-2 border-b border-[#1e293b]">
+            <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 font-semibold">
+              Flight Inspector
+            </span>
+            <span className="text-[10px] font-mono text-slate-400">
+              SQUAWK: <MonoText className="text-slate-200 font-semibold">{selectedFlight.squawk}</MonoText>
             </span>
           </div>
 
-          {/* New Route Info Section */}
-          <div className="pb-3 mb-3 border-b border-slate-200">
+          {/* Route Section */}
+          <div className="p-2.5 rounded bg-[#131b2e] border border-[#1e293b]">
             {loadingRoute ? (
-               <div className="text-[10px] text-slate-500 font-bold tracking-widest animate-pulse">LOADING ROUTE...</div>
+              <div className="text-[10px] font-mono text-slate-400 animate-pulse">
+                Resolving flight route schedule...
+              </div>
             ) : routeData ? (
-               <div className="flex flex-col">
-                 <div className="text-lg font-bold text-slate-900 tracking-wide uppercase">
-                   {routeData.origin} → {routeData.destination}
-                 </div>
-                 <div className="text-[10px] text-slate-500 font-medium uppercase mt-1">
-                   {routeData.airline}
-                 </div>
-               </div>
+              <div>
+                <div className="flex items-center justify-between">
+                  <div className="text-sm font-mono font-bold text-slate-100 tracking-wide">
+                    {routeData.origin} → {routeData.destination}
+                  </div>
+                  <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-sky-950/80 border border-sky-800/60 text-sky-300">
+                    AIRLABS
+                  </span>
+                </div>
+                <div className="text-[10px] font-mono text-slate-400 mt-0.5">
+                  {routeData.airline}
+                </div>
+              </div>
             ) : (
-               <div className="text-[10px] text-slate-500 font-bold tracking-widest">ROUTE UNAVAILABLE</div>
+              <div className="text-[10px] font-mono text-slate-400">
+                Direct En-Route Sector Transit
+              </div>
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-y-3 gap-x-4">
-            <div className="space-y-0.5">
-              <p className="text-[9px] text-slate-400 uppercase">Callsign / HEX</p>
-              <p className="text-xs font-bold text-slate-900">
-                {selectedFlight.callsign || 'UNK'} <span className="text-[9px] text-slate-400 font-mono font-normal">({selectedFlight.icao24})</span>
-              </p>
+          {/* Flight Parameters Grid */}
+          <div className="grid grid-cols-2 gap-2 text-[10px] font-mono">
+            <div className="p-2 rounded bg-[#111827] border border-[#1e293b]">
+              <span className="text-[9px] text-slate-400 block uppercase">Callsign / ICAO</span>
+              <span className="font-bold text-slate-100">{selectedFlight.callsign || 'UNKNOWN'}</span>
+              <span className="text-slate-400 ml-1">({selectedFlight.icao24})</span>
             </div>
 
-            <div className="space-y-0.5">
-              <p className="text-[9px] text-slate-400 uppercase">Sector Status</p>
-              <span className={`inline-block px-1.5 py-0.5 text-[8px] font-bold border rounded-sm ${getStatusStyle(selectedFlight.status)}`}>
-                {selectedFlight.status}
-              </span>
+            <div className="p-2 rounded bg-[#111827] border border-[#1e293b]">
+              <span className="text-[9px] text-slate-400 block uppercase">Status</span>
+              <div className="mt-0.5">{getStatusBadge(selectedFlight.status)}</div>
             </div>
 
-            <div className="space-y-0.5">
-              <p className="text-[9px] text-slate-400 uppercase">Live Altitude</p>
-              <p className="text-xs font-bold text-slate-800">
-                <MonoText className="text-xs">{selectedFlight.altitude.toLocaleString()}</MonoText>
-                <span className="text-[8px] text-slate-400 font-normal ml-1">FT</span>
-              </p>
+            <div className="p-2 rounded bg-[#111827] border border-[#1e293b]">
+              <span className="text-[9px] text-slate-400 block uppercase">Altitude</span>
+              <MonoText className="text-xs font-bold text-slate-100">
+                {selectedFlight.altitude.toLocaleString()} FT
+              </MonoText>
             </div>
 
-            <div className="space-y-0.5">
-              <p className="text-[9px] text-slate-400 uppercase">Ground Speed</p>
-              <p className="text-xs font-bold text-slate-800">
-                <MonoText className="text-xs">{selectedFlight.speed}</MonoText>
-                <span className="text-[8px] text-slate-400 font-normal ml-1">KT</span>
-              </p>
+            <div className="p-2 rounded bg-[#111827] border border-[#1e293b]">
+              <span className="text-[9px] text-slate-400 block uppercase">Ground Speed</span>
+              <MonoText className="text-xs font-bold text-slate-100">
+                {selectedFlight.speed} KT
+              </MonoText>
             </div>
 
-            <div className="col-span-2 space-y-0.5">
-              <p className="text-[9px] text-slate-400 uppercase">Position Vectors (Lat/Lon)</p>
-              <p className="text-[11px] font-medium text-slate-900">
-                <MonoText className="text-[11px]">{formatCoordinates(selectedFlight.latitude, selectedFlight.longitude)}</MonoText>
-              </p>
+            <div className="col-span-2 p-2 rounded bg-[#111827] border border-[#1e293b]">
+              <span className="text-[9px] text-slate-400 block uppercase">Coordinates</span>
+              <MonoText className="text-slate-200">
+                {formatCoordinates(selectedFlight.latitude, selectedFlight.longitude)}
+              </MonoText>
             </div>
-            
-            <div className="col-span-2 space-y-0.5">
-              <p className="text-[9px] text-slate-400 uppercase">Vertical Rate</p>
-              <p className="text-[11px] font-medium text-slate-900">
-                <MonoText className="text-[11px]">{selectedFlight.verticalRate}</MonoText>
-                <span className="text-[8px] text-slate-400 font-normal ml-1">M/S</span>
-              </p>
+
+            {/* ML Predicted Duration & Delay */}
+            <div className="p-2 rounded bg-[#111827] border border-[#1e293b]">
+              <span className="text-[9px] text-slate-400 block uppercase">Duration (ML)</span>
+              {isETALoading ? (
+                <span className="text-[10px] text-sky-400 animate-pulse">Calculating...</span>
+              ) : mlEtaMinutes !== null ? (
+                <MonoText className="text-xs font-bold text-sky-400">
+                  {formatEtaDuration(mlEtaMinutes)}
+                </MonoText>
+              ) : (
+                <span className="text-slate-500">N/A</span>
+              )}
             </div>
-            
-            <div className="col-span-2 space-y-0.5 mt-2 pt-2 border-t border-slate-200">
-              <p className="text-[9px] text-slate-400 uppercase">ETA (BETA)</p>
-              <p className="text-[11px] font-medium text-slate-900">
-                {isETALoading ? (
-                  <span className="text-slate-500 italic animate-pulse">CALCULATING...</span>
-                ) : mlEtaMinutes !== null ? (
-                  <>
-                    <MonoText className="text-[11px] font-bold text-indigo-600">{mlEtaMinutes}</MonoText>
-                    <span className="text-[8px] text-slate-400 font-normal ml-1">MIN</span>
-                  </>
+
+            <div className="p-2 rounded bg-[#111827] border border-[#1e293b]">
+              <span className="text-[9px] text-slate-400 block uppercase">Schedule Delta</span>
+              {isETALoading || loadingRoute ? (
+                <span className="text-[10px] text-slate-400 animate-pulse">Syncing...</span>
+              ) : isDelayCalculated ? (
+                delayMinutes > 0 ? (
+                  <span className="font-semibold text-rose-400">+{delayMinutes}m Delayed</span>
+                ) : delayMinutes < 0 ? (
+                  <span className="font-semibold text-emerald-400">
+                    {Math.abs(delayMinutes)}m Early
+                  </span>
                 ) : (
-                  <span className="text-slate-400">N/A</span>
-                )}
-              </p>
-            </div>
-
-            <div className="col-span-2 space-y-0.5 pt-1">
-              <p className="text-[9px] text-slate-400 uppercase">Predicted Delay</p>
-              <p className="text-[11px] font-medium">
-                {isETALoading || loadingRoute ? (
-                  <span className="text-slate-500 italic animate-pulse uppercase">CALCULATING DELAY...</span>
-                ) : isDelayCalculated ? (
-                  delayMinutes > 0 ? (
-                    <span className="font-bold text-red-600">DELAY: +{delayMinutes} MIN</span>
-                  ) : delayMinutes < 0 ? (
-                    <span className="font-bold text-emerald-600">EARLY: {Math.abs(delayMinutes)} MIN</span>
-                  ) : (
-                    <span className="font-bold text-emerald-600">ON TIME</span>
-                  )
-                ) : (
-                  <span className="text-slate-400 uppercase">N/A</span>
-                )}
-              </p>
+                  <span className="font-semibold text-emerald-400">On Time</span>
+                )
+              ) : (
+                <span className="text-slate-500">Standard</span>
+              )}
             </div>
           </div>
 
-          {/* Simple Vector Compass Ticker */}
-          <div className="flex justify-between items-center text-[10px] bg-white border border-slate-200 rounded-sm px-3 py-2">
-            <span className="text-slate-400">VECTOR HEADING</span>
-            <div className="flex items-center gap-1.5">
+          {/* Heading Vector Compass Readout */}
+          <div className="flex justify-between items-center px-3 py-2 bg-[#111827] border border-[#1e293b] rounded text-[10px] font-mono">
+            <span className="text-slate-400">HEADING VECTOR</span>
+            <div className="flex items-center gap-1.5 text-slate-200">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
                 strokeWidth="2"
-                className="w-3.5 h-3.5 text-slate-700"
+                className="w-3.5 h-3.5 text-sky-400"
                 style={{ transform: `rotate(${selectedFlight.heading}deg)` }}
               >
                 <line x1="12" y1="5" x2="12" y2="19" />
                 <polyline points="19 12 12 19 5 12" />
               </svg>
-              <MonoText className="font-semibold text-slate-800">
+              <MonoText className="font-bold">
                 {String(selectedFlight.heading).padStart(3, '0')}°
               </MonoText>
             </div>
