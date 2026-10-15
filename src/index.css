@@ -8,19 +8,19 @@
 
 :root {
   font-family: var(--font-sans);
-  color-scheme: light;
+  color-scheme: dark;
 }
 
 body {
   margin: 0;
   padding: 0;
-  background-color: var(--color-slate-50);
-  color: var(--color-slate-900);
+  background-color: #0b0f17;
+  color: #f1f5f9;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Clean, crisp scrollbars */
+/* Clean, crisp dark scrollbars */
 ::-webkit-scrollbar {
   width: 4px;
   height: 4px;
@@ -29,9 +29,14 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--color-slate-200);
+  background: #1e293b;
   border-radius: 2px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--color-slate-300);
+  background: #334155;
+}
+
+/* Precision range input styling */
+input[type="range"] {
+  accent-color: #38bdf8;
 }

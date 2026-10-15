@@ -21,7 +21,7 @@ const App: React.FC = () => {
   }, [flights, minAltitude, maxAltitude]);
 
   return (
-    <div className="grid grid-cols-[20%_60%_20%] w-full h-screen bg-slate-50 text-slate-900 overflow-hidden select-none">
+    <div className="grid grid-cols-[280px_1fr_360px] xl:grid-cols-[300px_1fr_380px] w-full h-screen bg-[#0b0f17] text-slate-100 overflow-hidden select-none">
       <LeftPanel
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
@@ -32,6 +32,7 @@ const App: React.FC = () => {
         maxAltitude={maxAltitude}
         setMaxAltitude={setMaxAltitude}
         refreshData={refreshData}
+        flights={flights}
       />
       <DataCanvas 
         flights={filteredGlobeFlights} 
