@@ -3,8 +3,10 @@ import { LeftPanel } from './components/LeftPanel';
 import { DataCanvas } from './components/DataCanvas';
 import { TelemetryPanel } from './components/TelemetryPanel';
 import { useLiveTelemetry } from './hooks/useLiveTelemetry';
+import { useTheme } from './context/ThemeContext';
 
 const App: React.FC = () => {
+  const { isDark } = useTheme();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('ALL');
   const [minAltitude, setMinAltitude] = useState(28000);
@@ -21,7 +23,9 @@ const App: React.FC = () => {
   }, [flights, minAltitude, maxAltitude]);
 
   return (
-    <div className="grid grid-cols-[280px_1fr_360px] xl:grid-cols-[300px_1fr_380px] w-full h-screen bg-[#0b0f17] text-slate-100 overflow-hidden select-none">
+    <div className={`grid grid-cols-[280px_1fr_360px] xl:grid-cols-[300px_1fr_380px] w-full h-screen overflow-hidden select-none transition-colors duration-200 ${
+      isDark ? 'bg-[#0b0f17] text-slate-100' : 'bg-slate-100 text-slate-900'
+    }`}>
       <LeftPanel
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
