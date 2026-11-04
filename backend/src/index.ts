@@ -24,7 +24,27 @@ const OPENSKY_TOKEN_URL =
     'https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token';
 let openSkyToken: string | null = null;
 let openSkyTokenExpiry = 0;
+let tokenRetryAfter = 0; // after a token failure, use anonymous access for a while
 
+/** Human-readable description of an axios error: HTTP status + body, or network error code. */
+const describeError = (err: unknown): string => {
+    if (axios.isAxiosError(err)) {
+        if (err.response) {
+            const body = typeof err.response.data === 'string'
+                ? err.response.data.slice(0, 200)
+                : JSON.stringify(err.response.data)?.slice(0, 200);
+            return `HTTP ${err.response.status}: ${body}`;
+        }
+        return `${err.code ?? 'NETWORK_ERROR'}: ${err.message}`;
+    }
+    return err instanceof Error ? err.message : String(err);
+};
+
+/**
+ * Returns a Bearer token, or null to use anonymous access. Never throws: if the
+ * OpenSky auth server is slow/unreachable or rejects the credentials, we log why
+ * and fall back to anonymous access instead of failing the whole request.
+ */
 const getOpenSkyToken = async (forceRefresh = false): Promise<string | null> => {
     const clientId = process.env.OPENSKY_CLIENT_ID;
     const clientSecret = process.env.OPENSKY_CLIENT_SECRET;
@@ -33,19 +53,28 @@ const getOpenSkyToken = async (forceRefresh = false): Promise<string | null> => 
     if (!forceRefresh && openSkyToken && Date.now() < openSkyTokenExpiry - 60_000) {
         return openSkyToken;
     }
+    if (!forceRefresh && Date.now() < tokenRetryAfter) return null;
 
-    const body = new URLSearchParams({
-        grant_type: 'client_credentials',
-        client_id: clientId,
-        client_secret: clientSecret
-    });
-    const { data } = await axios.post(OPENSKY_TOKEN_URL, body.toString(), {
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        timeout: 5000
-    });
-    openSkyToken = data.access_token;
-    openSkyTokenExpiry = Date.now() + (data.expires_in ?? 1800) * 1000;
-    return openSkyToken;
+    try {
+        const body = new URLSearchParams({
+            grant_type: 'client_credentials',
+            client_id: clientId,
+            client_secret: clientSecret
+        });
+        const { data } = await axios.post(OPENSKY_TOKEN_URL, body.toString(), {
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            timeout: 15000
+        });
+        openSkyToken = data.access_token;
+        openSkyTokenExpiry = Date.now() + (data.expires_in ?? 1800) * 1000;
+        console.log('OpenSky OAuth token acquired');
+        return openSkyToken;
+    } catch (err) {
+        console.error('OpenSky token request failed, falling back to anonymous:', describeError(err));
+        openSkyToken = null;
+        tokenRetryAfter = Date.now() + 5 * 60_000; // retry auth in 5 min
+        return null;
+    }
 };
 
 // OpenSky bounding box coordinates (Example: covering a target airspace region)
@@ -114,7 +143,7 @@ app.get('/api/telemetry', async (_req, res) => {
             const token = await getOpenSkyToken(forceRefresh);
             return axios.get<OpenSkyResponse>(url, {
                 params: AIRSPACE_BOUNDS,
-                timeout: 10000,
+                timeout: 20000,
                 headers: token ? { Authorization: `Bearer ${token}` } : undefined
             });
         };
@@ -149,8 +178,7 @@ app.get('/api/telemetry', async (_req, res) => {
 
         res.json(processedFlights);
     } catch (error: unknown) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        console.error('Error fetching data from OpenSky:', errorMessage);
+        console.error('Error fetching data from OpenSky:', describeError(error));
 
         // Fallback to cache on error (like 429 Rate Limit)
         if (cachedFlights.length > 0) {
@@ -296,7 +324,21 @@ app.get('/api/health', async (_req, res) => {
             ml = 'unreachable';
         }
     }
-    res.json({ status: 'ONLINE', ml });
+    const hasCreds = Boolean(process.env.OPENSKY_CLIENT_ID && process.env.OPENSKY_CLIENT_SECRET);
+    const opensky = !hasCreds
+        ? 'anonymous (no credentials set)'
+        : openSkyToken && Date.now() < openSkyTokenExpiry
+            ? 'oauth'
+            : tokenRetryAfter > Date.now()
+                ? 'anonymous (token request failed, see logs)'
+                : 'oauth (token not fetched yet)';
+    res.json({
+        status: 'ONLINE',
+        opensky,
+        cachedFlights: cachedFlights.length,
+        cacheAgeSec: lastFetchTime ? Math.round((Date.now() - lastFetchTime) / 1000) : null,
+        ml
+    });
 });
 
 app.listen(PORT, () => {
