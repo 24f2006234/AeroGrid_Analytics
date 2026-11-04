@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { API_URL } from '../config';
 import { Flight } from '../types';
 
 export const useLiveTelemetry = (intervalMs = 30000) => {
@@ -9,7 +10,7 @@ export const useLiveTelemetry = (intervalMs = 30000) => {
 
   const fetchTelemetry = useCallback(async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/telemetry');
+      const response = await fetch(`${API_URL}/api/telemetry`);
       if (response.ok) {
         const data: Flight[] = await response.json();
         setFlights(data);

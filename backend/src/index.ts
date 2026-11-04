@@ -7,8 +7,46 @@ import { OpenSkyResponse, FlightTelemetry, OpenSkyStateVector } from './types';
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-app.use(cors());
+// Comma-separated list of allowed frontend origins, e.g. "https://aerogrid.vercel.app".
+// Unset = allow all (convenient for local dev).
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+    ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim()).filter(Boolean)
+    : null;
+
+app.use(cors(allowedOrigins ? { origin: allowedOrigins } : undefined));
 app.use(express.json());
+
+/**
+ * OpenSky OAuth2 (client credentials). Basic auth is no longer accepted by OpenSky.
+ * Tokens live ~30 min; we refresh 60s before expiry.
+ */
+const OPENSKY_TOKEN_URL =
+    'https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token';
+let openSkyToken: string | null = null;
+let openSkyTokenExpiry = 0;
+
+const getOpenSkyToken = async (forceRefresh = false): Promise<string | null> => {
+    const clientId = process.env.OPENSKY_CLIENT_ID;
+    const clientSecret = process.env.OPENSKY_CLIENT_SECRET;
+    if (!clientId || !clientSecret) return null; // anonymous mode
+
+    if (!forceRefresh && openSkyToken && Date.now() < openSkyTokenExpiry - 60_000) {
+        return openSkyToken;
+    }
+
+    const body = new URLSearchParams({
+        grant_type: 'client_credentials',
+        client_id: clientId,
+        client_secret: clientSecret
+    });
+    const { data } = await axios.post(OPENSKY_TOKEN_URL, body.toString(), {
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        timeout: 5000
+    });
+    openSkyToken = data.access_token;
+    openSkyTokenExpiry = Date.now() + (data.expires_in ?? 1800) * 1000;
+    return openSkyToken;
+};
 
 // OpenSky bounding box coordinates (Example: covering a target airspace region)
 // format: [lamin, lomin, lamax, lomax]
@@ -52,7 +90,10 @@ const normalizeFlightData = (state: OpenSkyStateVector): FlightTelemetry => {
 
 let cachedFlights: FlightTelemetry[] = [];
 let lastFetchTime = 0;
-const CACHE_TTL = 60000; // 60 seconds
+// The India bounding box (30° x 30° = 900 sq°) costs 4 OpenSky credits per call.
+// Standard accounts get 4,000 credits/day, so 120s TTL => max 720 calls/day = 2,880 credits.
+// Anonymous users only get 400 credits/day: set OPENSKY_CACHE_TTL_MS to ~900000 (15 min) in that case.
+const CACHE_TTL = Number(process.env.OPENSKY_CACHE_TTL_MS) || 120_000;
 
 /**
  * Route: Fetches active flights within defined geographic boundaries
@@ -69,28 +110,28 @@ app.get('/api/telemetry', async (_req, res) => {
         console.log('Fetching fresh data from OpenSky');
         const url = `https://opensky-network.org/api/states/all`;
 
-        // Prepare axios config, conditionally adding auth if env vars exist
-        const axiosConfig: any = {
-            params: {
-                lamin: AIRSPACE_BOUNDS.lamin,
-                lomin: AIRSPACE_BOUNDS.lomin,
-                lamax: AIRSPACE_BOUNDS.lamax,
-                lomax: AIRSPACE_BOUNDS.lomax
-            },
-            timeout: 5000
+        const fetchStates = async (forceRefresh = false) => {
+            const token = await getOpenSkyToken(forceRefresh);
+            return axios.get<OpenSkyResponse>(url, {
+                params: AIRSPACE_BOUNDS,
+                timeout: 10000,
+                headers: token ? { Authorization: `Bearer ${token}` } : undefined
+            });
         };
 
-        if (process.env.OPENSKY_USERNAME && process.env.OPENSKY_PASSWORD) {
-            console.log(`Using OpenSky Auth for user: ${process.env.OPENSKY_USERNAME}`);
-            axiosConfig.auth = {
-                username: process.env.OPENSKY_USERNAME,
-                password: process.env.OPENSKY_PASSWORD
-            };
-        } else {
-            console.log('No OpenSky Auth credentials found in .env');
+        let response;
+        try {
+            response = await fetchStates();
+        } catch (err) {
+            // Token may have expired early: refresh once and retry
+            if (axios.isAxiosError(err) && err.response?.status === 401) {
+                response = await fetchStates(true);
+            } else {
+                throw err;
+            }
         }
-
-        const response = await axios.get<OpenSkyResponse>(url, axiosConfig);
+        const remaining = response.headers['x-rate-limit-remaining'];
+        if (remaining !== undefined) console.log(`OpenSky credits remaining: ${remaining}`);
 
         if (!response.data || !response.data.states) {
             console.log('Serving cached data due to empty response');
@@ -121,16 +162,27 @@ app.get('/api/telemetry', async (_req, res) => {
     }
 });
 
+// Route info rarely changes during a flight: cache per callsign to save AirLabs quota.
+const ROUTE_CACHE_TTL = 30 * 60_000; // 30 minutes
+const routeCache = new Map<string, { data: unknown; expires: number }>();
+
 app.get('/api/route/:callsign', async (req, res) => {
     const defaultResponse = { origin: "N/A", destination: "N/A", airline: "Unknown", scheduledArrivalTS: null };
     try {
-        const callsign = req.params.callsign ? req.params.callsign.trim() : '';
-        if (!callsign || callsign === 'UNK_FLT') {
+        const callsign = req.params.callsign ? req.params.callsign.trim().toUpperCase() : '';
+        if (!callsign || callsign === 'UNK_FLT' || !/^[A-Z0-9]{2,10}$/.test(callsign)) {
             return res.json(defaultResponse);
         }
 
-        const url = `https://airlabs.co/api/v9/flight?flight_icao=${callsign}&api_key=${process.env.AIRLABS_API_KEY}`;
-        const response = await axios.get(url);
+        const cached = routeCache.get(callsign);
+        if (cached && cached.expires > Date.now()) {
+            return res.json(cached.data);
+        }
+
+        const response = await axios.get('https://airlabs.co/api/v9/flight', {
+            params: { flight_icao: callsign, api_key: process.env.AIRLABS_API_KEY },
+            timeout: 8000
+        });
 
         let data = response.data?.response;
         if (Array.isArray(data)) {
@@ -145,8 +197,13 @@ app.get('/api/route/:callsign', async (req, res) => {
 
         if (data.dep_iata && data.arr_iata) {
             try {
-                const airportsUrl = `https://airlabs.co/api/v9/airports?iata_code=${data.dep_iata},${data.arr_iata}&api_key=${process.env.AIRLABS_API_KEY}`;
-                const airportsResponse = await axios.get(airportsUrl);
+                const airportsResponse = await axios.get('https://airlabs.co/api/v9/airports', {
+                    params: {
+                        iata_code: `${data.dep_iata},${data.arr_iata}`,
+                        api_key: process.env.AIRLABS_API_KEY
+                    },
+                    timeout: 8000
+                });
                 const airports = airportsResponse.data?.response;
                 if (Array.isArray(airports)) {
                     const depAirport = airports.find((a: any) => a.iata_code === data.dep_iata);
@@ -165,7 +222,7 @@ app.get('/api/route/:callsign', async (req, res) => {
             }
         }
 
-        return res.json({
+        const result = {
             origin: data.dep_iata || "N/A",
             destination: data.arr_iata || "N/A",
             airline: data.airline_name || "Unknown Airline",
@@ -175,7 +232,9 @@ app.get('/api/route/:callsign', async (req, res) => {
             startLng,
             endLat,
             endLng
-        });
+        };
+        routeCache.set(callsign, { data: result, expires: Date.now() + ROUTE_CACHE_TTL });
+        return res.json(result);
     } catch (error: unknown) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         console.error(`Error fetching AirLabs data for ${req.params.callsign}:`, errorMessage);

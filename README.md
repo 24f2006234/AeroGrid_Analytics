@@ -94,7 +94,7 @@ npm install
 npm run dev
 ```
 
-*Note: Ensure you configure the `.env` file based on the provided `.env.bak` template before starting the server.*
+*Note: Copy `backend/.env.example` to `backend/.env` and fill in your OpenSky OAuth2 client credentials and AirLabs key. OpenSky no longer accepts username/password auth.*
 
 ### 3. ML Analytics Engine
 

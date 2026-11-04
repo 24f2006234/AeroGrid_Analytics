@@ -88,7 +88,8 @@ def train_model(csv_path="training_data.csv"):
             print(f"Epoch [{epoch+1}/{epochs}] | Training Loss: {total_loss/len(train_loader):.2f} | Val MAE: {mae:.2f} seconds")
 
     # Save the trained brain
-    torch.save(model.state_dict(), 'eta_model.pth')
+    # Save as plain CPU tensors so the model loads on any host (no DirectML needed)
+    torch.save({k: v.detach().cpu() for k, v in model.state_dict().items()}, 'eta_model.pth')
     print("Training Complete. Saved 'eta_model.pth' and 'scaler.pkl'.")
 
 if __name__ == '__main__':

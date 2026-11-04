@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Flight } from '../types';
 import { MonoText } from './MonoText';
 import { useTheme } from '../context/ThemeContext';
+import { API_URL, ML_URL } from '../config';
 
 const AVIATION_HUBS = [
   { name: 'DEL', lat: 28.5562, lon: 77.1 },
@@ -137,7 +138,7 @@ export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({
       setLoadingRoute(true);
       setIsETALoading(true);
 
-      fetch(`http://localhost:5000/api/route/${selectedFlight.callsign}`)
+      fetch(`${API_URL}/api/route/${encodeURIComponent(selectedFlight.callsign)}`)
         .then((res) => res.json())
         .catch((err) => {
           console.error('Failed to fetch Route:', err);
@@ -189,7 +190,7 @@ export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({
             );
           }
 
-          fetch('http://localhost:8000/predict-eta', {
+          fetch(`${ML_URL}/predict-eta`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
