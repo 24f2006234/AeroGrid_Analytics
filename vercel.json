@@ -8,7 +8,7 @@
     "backend": {
       "root": "backend",
       "framework": "express",
-      "entrypoint": "dist/server.js",
+      "entrypoint": "server.js",
       "installCommand": "npm ci",
       "bindings": [
         {
