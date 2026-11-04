@@ -242,6 +242,63 @@ app.get('/api/route/:callsign', async (req, res) => {
     }
 });
 
+/**
+ * ML ETA proxy. The ML service stays private: on Vercel it is reached through the
+ * service binding ML_SERVICE_URL (injected by Vercel, never set manually there).
+ * Elsewhere (local dev / Render) set ML_SERVICE_URL yourself, e.g. http://localhost:8000.
+ */
+const mlUrl = (path: string): string | null => {
+    const base = process.env.ML_SERVICE_URL;
+    if (!base) return null;
+    // Trailing slash so relative paths append instead of replacing the last segment
+    return new URL(path, base.endsWith('/') ? base : `${base}/`).toString();
+};
+
+const ETA_FIELDS = ['velocity', 'altitude', 'heading', 'vertical_rate', 'min_dist_to_hub'] as const;
+
+app.post('/api/predict-eta', async (req, res) => {
+    const target = mlUrl('predict-eta');
+    if (!target) {
+        return res.status(503).json({ error: 'ML service not configured' });
+    }
+
+    // Forward only the expected numeric fields
+    const payload: Record<string, number> = {};
+    for (const field of ETA_FIELDS) {
+        const value = Number(req.body?.[field]);
+        if (!Number.isFinite(value)) {
+            return res.status(400).json({ error: `Invalid or missing field: ${field}` });
+        }
+        payload[field] = value;
+    }
+
+    try {
+        const { data } = await axios.post(target, payload, { timeout: 10000 });
+        return res.json(data);
+    } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        console.error('Error calling ML service:', errorMessage);
+        return res.status(502).json({ error: 'ML service unavailable' });
+    }
+});
+
+/**
+ * Health check: confirms the backend is up and whether the ML service is reachable.
+ * Makes no OpenSky/AirLabs calls, so it is safe to use for uptime pings.
+ */
+app.get('/api/health', async (_req, res) => {
+    let ml: unknown = 'not configured';
+    const target = mlUrl('system-check');
+    if (target) {
+        try {
+            ml = (await axios.get(target, { timeout: 5000 })).data;
+        } catch {
+            ml = 'unreachable';
+        }
+    }
+    res.json({ status: 'ONLINE', ml });
+});
+
 app.listen(PORT, () => {
     console.log(`[AeroGrid Backend] Server running on http://localhost:${PORT}`);
 });

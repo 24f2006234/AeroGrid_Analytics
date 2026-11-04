@@ -1,5 +1,5 @@
-// Service URLs. Set VITE_API_URL / VITE_ML_URL at build time (e.g. in Vercel env vars).
-const stripSlash = (url: string) => url.replace(/\/+$/, '');
-
-export const API_URL = stripSlash(import.meta.env.VITE_API_URL || 'http://localhost:5000');
-export const ML_URL = stripSlash(import.meta.env.VITE_ML_URL || 'http://localhost:8000');
+// Backend base URL. Default '' = same origin, which is what Vercel Services uses
+// (/api/* is routed to the backend service). Locally, `npm run dev` proxies /api to
+// http://localhost:5000 (see vite.config.ts). Set VITE_API_URL only when the backend
+// lives on a different domain (e.g. Render).
+export const API_URL = (import.meta.env.VITE_API_URL || '').replace(/\/+$/, '');

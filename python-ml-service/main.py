@@ -1,28 +1,26 @@
+"""AeroGrid ML Engine: serves ETA predictions from the trained MLP.
+
+The model is trained in PyTorch (train.py, DirectML on AMD GPUs) and exported to
+NumPy arrays (export_model.py). Inference here is a plain NumPy forward pass of the
+same 5 -> 64 -> 32 -> 16 -> 1 ReLU network, so the service needs no torch/scikit-learn
+at runtime and fits comfortably within serverless bundle limits.
+"""
+import json
 import os
 from pathlib import Path
+
+import numpy as np
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-import torch
-import torch.nn as nn
-import pickle
-import numpy as np
-
-# DirectML (AMD GPU on Windows) is optional: cloud hosts run Linux without it, so fall back to CPU.
-try:
-    import torch_directml
-    DIRECTML_AVAILABLE = torch_directml.is_available()
-except ImportError:
-    torch_directml = None
-    DIRECTML_AVAILABLE = False
 
 BASE_DIR = Path(__file__).resolve().parent
 
 app = FastAPI(title="AeroGrid ML Engine")
 
-# Comma-separated frontend origins, e.g. "https://aerogrid.vercel.app". Unset = allow all (dev only).
+# Only needed when the browser calls this service directly (e.g. separate Render hosting).
+# On Vercel Services this service is internal and reached via the backend's binding.
 allowed_origins = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", "*").split(",") if o.strip()]
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
@@ -30,43 +28,36 @@ app.add_middleware(
     allow_headers=["Content-Type"],
 )
 
-# 1. Initialize Hardware & Model State
-device = torch_directml.device() if DIRECTML_AVAILABLE else torch.device("cpu")
-scaler = None
-model = None
 
-# Recreate the exact architecture from train.py
-def get_model():
-    return nn.Sequential(
-        nn.Linear(5, 64),
-        nn.ReLU(),
-        nn.Linear(64, 32),
-        nn.ReLU(),
-        nn.Linear(32, 16),
-        nn.ReLU(),
-        nn.Linear(16, 1)
-    ).to(device)
-
-@app.on_event("startup")
-def load_ml_assets():
-    """Loads the scaler and model weights into memory when the server boots."""
-    global scaler, model
+def _load_assets():
+    """Load exported weights + scaler once per process (cold start)."""
     try:
-        with open(BASE_DIR / 'scaler.pkl', 'rb') as f:
-            loaded_scaler = pickle.load(f)
+        weights = np.load(BASE_DIR / "eta_model.npz")
+        layers = [(weights[f"w{i}"], weights[f"b{i}"]) for i in range(4)]
+        with open(BASE_DIR / "scaler.json") as f:
+            s = json.load(f)
+        scaler = (np.asarray(s["mean"], dtype=np.float64), np.asarray(s["scale"], dtype=np.float64))
+        print("ML assets loaded (NumPy inference).")
+        return layers, scaler
+    except Exception as e:  # keep the service up so /system-check can report the problem
+        print(f"Warning: Could not load ML assets. Did you run train.py + export_model.py? Error: {e}")
+        return None, None
 
-        loaded_model = get_model()
-        state_dict = torch.load(BASE_DIR / 'eta_model.pth', map_location='cpu', weights_only=True)
-        loaded_model.load_state_dict(state_dict)
-        loaded_model.eval() # Set to evaluation mode (no training)
 
-        # Only publish once everything loaded, so /system-check never reports a half-loaded model
-        scaler, model = loaded_scaler, loaded_model
-        print(f"ML Assets loaded successfully on {device}.")
-    except Exception as e:
-        print(f"Warning: Could not load ML assets. Did you run train.py? Error: {e}")
+LAYERS, SCALER = _load_assets()
 
-# 2. Define the expected incoming JSON structure
+
+def predict_seconds(features: np.ndarray) -> float:
+    """Forward pass: standardize, then Linear+ReLU x3, then final Linear."""
+    mean, scale = SCALER
+    x = ((features - mean) / scale).astype(np.float32)
+    for i, (w, b) in enumerate(LAYERS):
+        x = x @ w.T + b
+        if i < len(LAYERS) - 1:
+            x = np.maximum(x, 0.0)
+    return float(x.ravel()[0])
+
+
 class FlightTelemetry(BaseModel):
     velocity: float
     altitude: float
@@ -74,43 +65,32 @@ class FlightTelemetry(BaseModel):
     vertical_rate: float
     min_dist_to_hub: float
 
+
 @app.post("/predict-eta")
 def predict_eta(flight: FlightTelemetry):
     """Takes live flight telemetry and returns predicted seconds to arrival."""
-    if model is None or scaler is None:
+    if LAYERS is None or SCALER is None:
         return {"error": "Model not loaded"}
 
-    # Convert incoming JSON to a numpy array matching the training shape
-    raw_features = np.array([[
-        flight.velocity, 
-        flight.altitude, 
-        flight.heading, 
-        flight.vertical_rate, 
-        flight.min_dist_to_hub
-    ]])
+    features = np.array([[
+        flight.velocity,
+        flight.altitude,
+        flight.heading,
+        flight.vertical_rate,
+        flight.min_dist_to_hub,
+    ]], dtype=np.float64)
 
-    # Standardize the numbers using the saved scaler
-    scaled_features = scaler.transform(raw_features)
-    
-    # Convert to PyTorch tensor and send to GPU
-    tensor_features = torch.FloatTensor(scaled_features).to(device)
-
-    # Run the prediction
-    with torch.no_grad():
-        prediction = model(tensor_features)
-        
-    eta_seconds = float(prediction.item())
-
+    eta_seconds = predict_seconds(features)
     return {
-        "eta_seconds": max(0, round(eta_seconds)), # Prevent negative time (updated weights loader)
-        "eta_minutes": max(0, round(eta_seconds / 60, 2))
+        "eta_seconds": max(0, round(eta_seconds)),  # Prevent negative time
+        "eta_minutes": max(0, round(eta_seconds / 60, 2)),
     }
+
 
 @app.get("/system-check")
 def system_check():
     return {
         "status": "ONLINE",
-        "gpu_acceleration": DIRECTML_AVAILABLE,
-        "device": str(device),
-        "model_loaded": model is not None
+        "inference": "numpy",
+        "model_loaded": LAYERS is not None,
     }

@@ -1,0 +1,7 @@
+# Training / data pipeline (local only, not deployed)
+pandas
+numpy
+scikit-learn
+torch
+torch-directml  # AMD GPU acceleration on Windows; optional
+requests

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Flight } from '../types';
 import { MonoText } from './MonoText';
 import { useTheme } from '../context/ThemeContext';
-import { API_URL, ML_URL } from '../config';
+import { API_URL } from '../config';
 
 const AVIATION_HUBS = [
   { name: 'DEL', lat: 28.5562, lon: 77.1 },
@@ -190,7 +190,7 @@ export const TelemetryPanel: React.FC<TelemetryPanelProps> = ({
             );
           }
 
-          fetch(`${ML_URL}/predict-eta`, {
+          fetch(`${API_URL}/api/predict-eta`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',

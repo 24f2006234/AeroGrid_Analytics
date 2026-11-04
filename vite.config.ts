@@ -8,4 +8,11 @@ export default defineConfig({
     react(),
     tailwindcss(),
   ],
+  server: {
+    // Standalone `npm run dev`: forward API calls to the local Express backend.
+    // (`vercel dev` routes /api itself via vercel.json.)
+    proxy: {
+      '/api': 'http://localhost:5000',
+    },
+  },
 })
