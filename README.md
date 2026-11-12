@@ -123,4 +123,7 @@ fastapi run main.py
 
 ## License
 
+For environment-file safeguards and historical credential recovery, see
+[SECURITY.md](SECURITY.md).
+
 Proprietary Software. All rights reserved.

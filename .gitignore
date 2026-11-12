@@ -25,6 +25,9 @@ venv/
 
 # Env variables
 .env
+.env.*
+*.env
+*.env.*
 
 # Keep example env templates
 !.env.example
